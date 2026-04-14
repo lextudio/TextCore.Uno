@@ -42,6 +42,25 @@ public sealed class CoreTextBox : UserControl, IDisposable
     private string _text = string.Empty;
     private int _caretIndex = 0;
 
+    // Public API: expose Text property and TextChanged event.
+    public event EventHandler? TextChanged;
+
+    public string Text
+    {
+        get => _text;
+        set
+        {
+            var newValue = value ?? string.Empty;
+            if (!string.Equals(_text, newValue, StringComparison.Ordinal))
+            {
+                _text = newValue;
+                _caretIndex = Math.Clamp(_caretIndex, 0, _text.Length);
+                UpdateDisplay();
+                try { TextChanged?.Invoke(this, EventArgs.Empty); } catch { }
+            }
+        }
+    }
+
     public CoreTextBox()
     {
         // Make the control focusable so it can receive keyboard events.
@@ -283,10 +302,10 @@ public sealed class CoreTextBox : UserControl, IDisposable
         {
             if (_caretIndex > 0)
             {
-                _text = _text.Remove(_caretIndex - 1, 1);
+                string newText = _text.Remove(_caretIndex - 1, 1);
                 _caretIndex--;
-                Console.WriteLine($"CoreTextBox: Backspace -> textLen={_text.Length} caretIndex={_caretIndex}");
-                UpdateDisplay();
+                Console.WriteLine($"CoreTextBox: Backspace -> textLen={newText.Length} caretIndex={_caretIndex}");
+                SetTextInternal(newText);
             }
             e.Handled = true;
             return;
@@ -300,20 +319,20 @@ public sealed class CoreTextBox : UserControl, IDisposable
                 int offset = (int)e.Key - (int)VirtualKey.A;
                 char ch = (char)('a' + offset);
                 if (shift) ch = char.ToUpperInvariant(ch);
-                _text = _text.Insert(_caretIndex, ch.ToString());
+                string newText = _text.Insert(_caretIndex, ch.ToString());
                 _caretIndex++;
-                Console.WriteLine($"CoreTextBox: Typed '{ch}' -> textLen={_text.Length} caretIndex={_caretIndex}");
-                UpdateDisplay();
+                Console.WriteLine($"CoreTextBox: Typed '{ch}' -> textLen={newText.Length} caretIndex={_caretIndex}");
+                SetTextInternal(newText);
                 e.Handled = true;
                 return;
             }
 
             if (e.Key == VirtualKey.Space)
             {
-                _text = _text.Insert(_caretIndex, " ");
+                string newText = _text.Insert(_caretIndex, " ");
                 _caretIndex++;
-                Console.WriteLine($"CoreTextBox: Typed ' ' (space) -> textLen={_text.Length} caretIndex={_caretIndex}");
-                UpdateDisplay();
+                Console.WriteLine($"CoreTextBox: Typed ' ' (space) -> textLen={newText.Length} caretIndex={_caretIndex}");
+                SetTextInternal(newText);
                 e.Handled = true;
                 return;
             }
@@ -328,18 +347,22 @@ public sealed class CoreTextBox : UserControl, IDisposable
             case "deleteBackward:":
                 if (_caretIndex > 0)
                 {
-                    _text = _text.Remove(_caretIndex - 1, 1);
+                    string newText = _text.Remove(_caretIndex - 1, 1);
                     _caretIndex--;
-                    UpdateDisplay();
+                    SetTextInternal(newText);
                 }
                 e.Handled = true;
                 break;
             case "deleteForward:":
                 if (_caretIndex < _text.Length)
                 {
-                    _text = _text.Remove(_caretIndex, 1);
-                    UpdateDisplay();
+                    string newText = _text.Remove(_caretIndex, 1);
+                    SetTextInternal(newText);
                 }
+                e.Handled = true;
+                break;
+            case "selectAll:":
+                SelectAll();
                 e.Handled = true;
                 break;
         }
@@ -377,11 +400,11 @@ public sealed class CoreTextBox : UserControl, IDisposable
             if (request is null) return;
             string incoming = request.Text ?? string.Empty;
             Console.WriteLine($"CoreTextBox: TextRequested commit='{incoming}' -> inserting at {_caretIndex}");
-            _text = _text.Insert(_caretIndex, incoming);
+            string newText = _text.Insert(_caretIndex, incoming);
             _caretIndex += incoming.Length;
             _isComposing = false;
             _composition = string.Empty;
-            UpdateDisplay();
+            SetTextInternal(newText);
         }
         catch (Exception ex)
         {
@@ -845,6 +868,43 @@ public sealed class CoreTextBox : UserControl, IDisposable
 
         // Fallback: approximate from font size
         return Math.Max(12.0, _prefix.FontSize * 1.2);
+    }
+
+    private void SetTextInternal(string newText)
+    {
+        if (newText == null) newText = string.Empty;
+        bool changed = !string.Equals(_text, newText, StringComparison.Ordinal);
+        _text = newText;
+        _caretIndex = Math.Clamp(_caretIndex, 0, _text.Length);
+        UpdateDisplay();
+        if (changed)
+        {
+            try { TextChanged?.Invoke(this, EventArgs.Empty); } catch { }
+        }
+    }
+
+    /// <summary>
+    /// Select all text in the control. Minimal implementation for the sample:
+    /// ensures the control is focused, scrolls to show the start, and places
+    /// the caret at the end of the text.
+    /// </summary>
+    public void SelectAll()
+    {
+        try
+        {
+            // If the control isn't focused, request programmatic focus so caret will show.
+            if (!_hasFocus)
+            {
+                _pendingPointerFocus = false;
+                _ = this.Focus(FocusState.Programmatic);
+            }
+        }
+        catch { }
+
+        // Show from the start of the text and place caret at the end.
+        _visibleStart = 0;
+        _caretIndex = Math.Clamp(_text?.Length ?? 0, 0, _text?.Length ?? 0);
+        UpdateDisplay();
     }
 
     public void Dispose()
