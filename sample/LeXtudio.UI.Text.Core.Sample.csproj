@@ -1,0 +1,25 @@
+<Project Sdk="Uno.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-desktop</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <UnoSingleProject>true</UnoSingleProject>
+    <ApplicationTitle>LeXtudio CoreText Sample</ApplicationTitle>
+    <ApplicationId>com.lextudio.coretext.sample</ApplicationId>
+    <UnoFeatures>SkiaRenderer</UnoFeatures>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="$(MSBuildThisFileDirectory)../src/LeXtudio.UI.Text.Core.csproj" />
+  </ItemGroup>
+
+  <!-- If the native macOS IME bridge was built in the core project, copy it to this sample's output so
+       the DllImport("libUnoEditMacInput.dylib") can find it at runtime. -->
+  <Target Name="CopyMacImeDylibToOutput" AfterTargets="Build">
+    <PropertyGroup>
+      <CoreDylibPath>$(MSBuildThisFileDirectory)..\src\bin\$(Configuration)\net10.0-desktop\libUnoEditMacInput.dylib</CoreDylibPath>
+      <DestDylib>$(OutputPath)libUnoEditMacInput.dylib</DestDylib>
+    </PropertyGroup>
+    <Copy Condition="Exists('$(CoreDylibPath)')" SourceFiles="$(CoreDylibPath)" DestinationFiles="$(DestDylib)" />
+  </Target>
+
+</Project>
