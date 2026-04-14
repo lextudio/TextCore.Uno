@@ -39,11 +39,11 @@
     <None Include="$(MacImeDylibPath)" Pack="true" PackagePath="runtimes/osx-arm64/native/libUnoEditMacInput.dylib" />
   </ItemGroup>
 
-  <Target Name="EnsureMacNativeBridgeForPack" BeforeTargets="Pack">
+  <Target Name="EnsureMacNativeBridgeForPack" BeforeTargets="Pack" DependsOnTargets="BuildTextCoreMacInputBridge">
     <Message Importance="high" Text="[LeXtudio.UI.Text.Core] macOS native bridge path: $(MacImeDylibPath)" Condition="'$(MacImeDylibPath)' != ''" />
     <Error
       Condition="'$(OS)' == 'Unix' and Exists('/System/Library/Frameworks/AppKit.framework') and '$(MacImeDylibPath)' == ''"
-      Text="macOS packaging requires libUnoEditMacInput.dylib. Build src/LeXtudio.UI.Text.Core/LeXtudio.UI.Text.Core.csproj first so the dylib is produced." />
+      Text="macOS packaging requires libUnoEditMacInput.dylib. Build the native bridge first (for example run: dotnet build -c Release /t:Build,BuildTextCoreMacInputBridge in the LeXtudio.UI.Text.Core project) so the dylib is produced." />
   </Target>
 
   <Target Name="BuildTextCoreMacInputBridge"
