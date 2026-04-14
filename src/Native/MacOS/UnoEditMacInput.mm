@@ -3,13 +3,17 @@
 #import <stdlib.h>
 #import <stdint.h>
 #import <math.h>
+#import <stdio.h>
+#import <stdarg.h>
+#import <string.h>
+#import <limits.h>
 
 typedef void (*unoedit_insert_text_fn)(void* context, const char* text);
 typedef void (*unoedit_command_fn)(void* context, const char* command);
 
 static BOOL unoedit_debug_enabled(void)
 {
-    const char* value = getenv("UNOEDIT_DEBUG_MACOS_IME");
+    const char* value = getenv("UNOEDIT_DEBUG_IME");
     if (value == NULL) {
         return NO;
     }
@@ -27,7 +31,23 @@ static void unoedit_log(NSString* format, ...)
     va_start(args, format);
     NSString* message = [[NSString alloc] initWithFormat:format arguments:args];
     va_end(args);
-    NSLog(@"[UnoEdit macOS IME] %@", message);
+
+    @try {
+        NSString* ts = [[NSDate date] descriptionWithLocale:nil];
+        NSString* line = [NSString stringWithFormat:@"%@ %@", ts, message];
+        const char* utf8 = [line UTF8String];
+        const char* tmp = getenv("TMPDIR");
+        if (tmp == NULL) tmp = "/tmp";
+        char path[PATH_MAX];
+        snprintf(path, sizeof(path), "%s/unoedit_ime.log", tmp);
+        FILE* f = fopen(path, "a");
+        if (f) {
+            fprintf(f, "%s\n", utf8);
+            fclose(f);
+        }
+    } @catch (NSException* e) {
+        // best-effort logging
+    }
 }
 
 @interface UnoEditInputTextView : NSTextView

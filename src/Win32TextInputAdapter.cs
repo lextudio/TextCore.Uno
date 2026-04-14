@@ -29,7 +29,7 @@ namespace LeXtudio.UI.Text.Core
 
         private static readonly bool s_debugEnabled =
             string.Equals(
-                Environment.GetEnvironmentVariable("LEXTUDIO_DEBUG_WIN32_IME"),
+                Environment.GetEnvironmentVariable("UNOEDIT_DEBUG_IME"),
                 "1",
                 StringComparison.Ordinal);
 
@@ -269,7 +269,7 @@ namespace LeXtudio.UI.Text.Core
             {
                 string path = System.IO.Path.Combine(
                     System.IO.Path.GetTempPath(),
-                    "lextudio_win32_ime.log");
+                    "unoedit_ime.log");
                 System.IO.File.AppendAllText(
                     path,
                     $"{DateTime.Now:HH:mm:ss.fff} [Win32Adapter] {message}{Environment.NewLine}");

@@ -6,7 +6,7 @@ namespace LeXtudio.UI.Text.Core;
 internal sealed class LinuxIBusConnection : IDisposable
 {
     private static readonly bool s_debug =
-        string.Equals(Environment.GetEnvironmentVariable("LEXTUDIO_DEBUG_LINUX_IME"), "1", StringComparison.Ordinal);
+        string.Equals(Environment.GetEnvironmentVariable("UNOEDIT_DEBUG_IME"), "1", StringComparison.Ordinal);
 
     private LinuxDBusConnection? _conn;
     private string? _inputContextPath;
@@ -331,9 +331,18 @@ internal sealed class LinuxIBusConnection : IDisposable
 
     private static void Log(string message)
     {
-        if (s_debug)
+        if (!s_debug)
         {
-            Console.Error.WriteLine($"[LeXtudio IBus] {message}");
+            return;
+        }
+
+        try
+        {
+            string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "unoedit_ime.log");
+            System.IO.File.AppendAllText(path, $"{DateTime.Now:HH:mm:ss.fff} [IBus] {message}{Environment.NewLine}");
+        }
+        catch
+        {
         }
     }
 
