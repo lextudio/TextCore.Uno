@@ -17,6 +17,7 @@
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <Deterministic>true</Deterministic>
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <UnoUIDisableLongPathWarning>false</UnoUIDisableLongPathWarning>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(OS)' == 'Unix' and Exists('/System/Library/Frameworks/AppKit.framework')">
