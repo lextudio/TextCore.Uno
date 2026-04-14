@@ -7,11 +7,12 @@
     <Authors>LeXtudio</Authors>
     <Company>LeXtudio</Company>
     <Version>1.0.0</Version>
-    <Description>Core cross-platform text/IME primitives used by editor integrations.</Description>
+    <Description>Core cross-platform text/IME primitives used by editor integrations for Uno Platform.</Description>
     <PackageId>LeXtudio.UI.Text.Core</PackageId>
     <IsPackable>true</IsPackable>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <Deterministic>true</Deterministic>
@@ -29,7 +30,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="README.md" Pack="true" PackagePath="/" />
+    <!-- Use repository README -->
+    <None Include="..\README.md" Pack="true" PackagePath="/" />
+    <!-- Include repository LICENSE in package root -->
+    <None Include="..\LICENSE" Pack="true" PackagePath="/" />
     <None Include="buildTransitive/LeXtudio.UI.Text.Core.targets" Pack="true" PackagePath="buildTransitive/LeXtudio.UI.Text.Core.targets" />
   </ItemGroup>
 

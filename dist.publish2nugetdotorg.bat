@@ -3,8 +3,10 @@ REM dist.publish2nugetdotorg.bat - Push signed nupkgs to NuGet.org
 SETLOCAL ENABLEDELAYEDEXPANSION
 
 :: Usage: dist.publish2nugetdotorg.bat [nupkgFolder]
+:: Usage: dist.publish2nugetdotorg.bat [nupkgFolder]
 if "%~1"=="" (
-  set "PKGDIR=%~dist"
+  rem default to the script's dist folder
+  set "PKGDIR=%~dp0dist"
 ) else (
   set "PKGDIR=%~1"
 )

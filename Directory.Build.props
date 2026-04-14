@@ -1,4 +1,7 @@
 <Project>
+  <PropertyGroup>
+    <GitVersionPackageVersion>5.12.0</GitVersionPackageVersion>
+  </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="GitVersion.MsBuild" Version="$(GitVersionPackageVersion)" PrivateAssets="All" />
   </ItemGroup>
