@@ -38,10 +38,27 @@ New-Item -Path $OutputDir -ItemType Directory -Force | Out-Null
 Remove-Item -Path (Join-Path $OutputDir "*.nupkg") -ErrorAction SilentlyContinue -Force
 
 # Locate the project file under the current folder
-$projectFile = Get-ChildItem -Path $scriptRoot -Filter '*.csproj' -Recurse -File | Where-Object { $_.Name -like 'LeXtudio.UI.Text.Core*.csproj' } | Select-Object -First 1
+# Prefer the exact library project and avoid selecting sample projects
+$allCsprojs = Get-ChildItem -Path $scriptRoot -Filter '*.csproj' -Recurse -File
+
+# 1) Prefer exact `LeXtudio.UI.Text.Core.csproj`
+$projectFile = $allCsprojs | Where-Object { $_.Name -ieq 'LeXtudio.UI.Text.Core.csproj' } | Select-Object -First 1
+
+# 2) Otherwise prefer a core project that is not a sample (e.g. avoid names containing 'Sample')
 if ($null -eq $projectFile) {
-    $projectFile = Get-ChildItem -Path $scriptRoot -Filter '*.csproj' -Recurse -File | Select-Object -First 1
+    $projectFile = $allCsprojs | Where-Object { $_.Name -like 'LeXtudio.UI.Text.Core*.csproj' -and ($_.Name -notlike '*Sample*') } | Select-Object -First 1
 }
+
+# 3) Fallback to any non-sample project
+if ($null -eq $projectFile) {
+    $projectFile = $allCsprojs | Where-Object { $_.Name -notlike '*Sample*' } | Select-Object -First 1
+}
+
+# 4) As last resort, pick the first project found
+if ($null -eq $projectFile) {
+    $projectFile = $allCsprojs | Select-Object -First 1
+}
+
 if ($null -eq $projectFile) { Write-ErrorAndExit "No .csproj found under $scriptRoot" }
 
 $projectDir = Split-Path -Parent $projectFile.FullName
