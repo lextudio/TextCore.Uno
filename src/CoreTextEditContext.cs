@@ -53,7 +53,7 @@ namespace LeXtudio.UI.Text.Core
         public event EventHandler<CoreTextEditContext, CoreTextCompositionCompletedEventArgs>? CompositionCompleted;
 
         /// <summary>Occurs when focus is removed from the text context.</summary>
-        public event EventHandler? FocusRemoved;
+        public event TypedEventHandler<CoreTextEditContext, object>? FocusRemoved;
 
         /// <summary>Occurs when a platform command is received (e.g. AppKit selectors like "deleteBackward:").</summary>
         public event EventHandler<CoreTextCommandReceivedEventArgs>? CommandReceived;
