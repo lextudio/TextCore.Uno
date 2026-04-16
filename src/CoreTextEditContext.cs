@@ -32,19 +32,19 @@ namespace LeXtudio.UI.Text.Core
         // ----- Events (public surface for consumers) -----
 
         /// <summary>Occurs when the platform requests the current text.</summary>
-        public event EventHandler<CoreTextTextRequestedEventArgs>? TextRequested;
+        public event EventHandler<CoreTextEditContext, CoreTextTextRequestedEventArgs>? TextRequested;
 
         /// <summary>Occurs when text is being updated by the platform.</summary>
-        public event EventHandler<CoreTextTextUpdatingEventArgs>? TextUpdating;
+        public event EventHandler<CoreTextEditContext, CoreTextTextUpdatingEventArgs>? TextUpdating;
 
         /// <summary>Occurs when the platform requests the current selection.</summary>
-        public event EventHandler<CoreTextSelectionRequestedEventArgs>? SelectionRequested;
+        public event EventHandler<CoreTextEditContext, CoreTextSelectionRequestedEventArgs>? SelectionRequested;
 
         /// <summary>Occurs when the selection is being updated by the platform.</summary>
-        public event EventHandler<CoreTextSelectionUpdatingEventArgs>? SelectionUpdating;
+        public event EventHandler<CoreTextEditContext, CoreTextSelectionUpdatingEventArgs>? SelectionUpdating;
 
         /// <summary>Occurs when a layout measurement is requested by the platform.</summary>
-        public event EventHandler<CoreTextLayoutRequestedEventArgs>? LayoutRequested;
+        public event EventHandler<CoreTextEditContext, CoreTextLayoutRequestedEventArgs>? LayoutRequested;
 
         /// <summary>Occurs when IME composition starts.</summary>
         public event EventHandler<CoreTextEditContext, CoreTextCompositionStartedEventArgs>? CompositionStarted;

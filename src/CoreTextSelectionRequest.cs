@@ -22,5 +22,27 @@ namespace LeXtudio.UI.Text.Core
             get => Start + Length;
             set => Length = System.Math.Max(0, value - Start);
         }
+
+        /// <summary>
+        /// Compatibility: WinUI exposes a `Selection` property that is a `CoreTextRange`.
+        /// Provide a convenience property that maps to Start/Length for source compatibility.
+        /// </summary>
+        public CoreTextRange Selection
+        {
+            get => new CoreTextRange { StartCaretPosition = Start, EndCaretPosition = Start + Length };
+            set
+            {
+                if (value is null)
+                {
+                    Start = 0;
+                    Length = 0;
+                }
+                else
+                {
+                    Start = value.StartCaretPosition;
+                    Length = System.Math.Max(0, value.EndCaretPosition - value.StartCaretPosition);
+                }
+            }
+        }
     }
 }
