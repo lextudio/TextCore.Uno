@@ -22,6 +22,10 @@ namespace LeXtudio.UI.Text.Core
         private GCHandle _selfHandle;
         private nint _bridgeHandle;
         private bool _disposed;
+        private double _lastCaretX;
+        private double _lastCaretY;
+        private double _lastCaretW;
+        private double _lastCaretH;
 
         public MacOSTextInputAdapter()
         {
@@ -91,6 +95,12 @@ namespace LeXtudio.UI.Text.Core
 
             try
             {
+                // Remember the last caret rect so NotifyLayoutChanged can re-apply it.
+                _lastCaretX = x;
+                _lastCaretY = y;
+                _lastCaretW = width;
+                _lastCaretH = height;
+
                 ulong eventId = (ulong)Interlocked.Increment(ref s_nextEventId);
                 NativeMethods.unoedit_ime_update_caret_rect(_bridgeHandle, eventId, x, y, width, height);
             }
@@ -98,6 +108,36 @@ namespace LeXtudio.UI.Text.Core
             {
                 Log($"NotifyCaretRectChanged failed: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// Called when the editor signals layout changes (WinUI parity). Re-apply
+        /// the last known caret rect to ensure the candidate window is positioned.
+        /// </summary>
+        public void NotifyLayoutChanged()
+        {
+            if (_bridgeHandle == nint.Zero)
+            {
+                return;
+            }
+
+            try
+            {
+                ulong eventId = (ulong)Interlocked.Increment(ref s_nextEventId);
+                NativeMethods.unoedit_ime_update_caret_rect(_bridgeHandle, eventId, _lastCaretX, _lastCaretY, _lastCaretW, _lastCaretH);
+            }
+            catch (Exception ex)
+            {
+                Log($"NotifyLayoutChanged failed: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Selection-changed notification — macOS adapter has no special action here.
+        /// </summary>
+        public void NotifySelectionChanged(CoreTextRange range)
+        {
+            // No-op; selection changes are handled via caret/layout updates.
         }
 
         /// <inheritdoc />

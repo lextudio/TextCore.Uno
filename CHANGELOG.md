@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented in this file. This project follows the "Keep a Changelog" format.
 
+## [v0.2.2] - 2026-04-16
+
+- Revised a few methods to match Core Text APIs for Windows.
+
 ## [v0.2.1] - 2026-04-15
 
 - Added missing native dependency.

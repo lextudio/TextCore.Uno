@@ -22,6 +22,11 @@ namespace LeXtudio.UI.Text.Core
         private bool _isComposing;
         private nint _x11Display;
         private nint _x11Window;
+        private double _lastCaretX;
+        private double _lastCaretY;
+        private double _lastCaretW;
+        private double _lastCaretH;
+        private double _lastCaretScale;
 
         [DllImport("libX11.so.6")]
         private static extern bool XTranslateCoordinates(
@@ -61,6 +66,13 @@ namespace LeXtudio.UI.Text.Core
                 return;
             }
 
+            // Remember last caret rect/scale so NotifyLayoutChanged can reapply it.
+            _lastCaretX = x;
+            _lastCaretY = y;
+            _lastCaretW = width;
+            _lastCaretH = height;
+            _lastCaretScale = scale;
+
             int screenX = (int)(x * scale);
             int screenY = (int)(y * scale);
             int w = Math.Max(1, (int)(width * scale));
@@ -85,6 +97,50 @@ namespace LeXtudio.UI.Text.Core
             }
 
             _ibus.SetCursorLocation(screenX, screenY, w, h);
+        }
+
+        /// <summary>
+        /// Re-apply the last known caret rect. Called by hosts when layout changes
+        /// so IME candidate windows can be repositioned (WinUI parity).
+        /// </summary>
+        public void NotifyLayoutChanged()
+        {
+            if (_ibus == null || _lastCaretScale == 0)
+            {
+                return;
+            }
+
+            int screenX = (int)(_lastCaretX * _lastCaretScale);
+            int screenY = (int)(_lastCaretY * _lastCaretScale);
+            int w = Math.Max(1, (int)(_lastCaretW * _lastCaretScale));
+            int h = Math.Max(1, (int)(_lastCaretH * _lastCaretScale));
+
+            if (_x11Display != nint.Zero && _x11Window != nint.Zero)
+            {
+                try
+                {
+                    nint root = XDefaultRootWindow(_x11Display);
+                    if (XTranslateCoordinates(_x11Display, _x11Window, root,
+                            screenX, screenY, out int destX, out int destY, out _))
+                    {
+                        screenX = destX;
+                        screenY = destY;
+                    }
+                }
+                catch
+                {
+                }
+            }
+
+            _ibus.SetCursorLocation(screenX, screenY, w, h);
+        }
+
+        /// <summary>
+        /// Selection-changed notification — Linux adapter has no special action.
+        /// </summary>
+        public void NotifySelectionChanged(CoreTextRange range)
+        {
+            // No-op for now; selection changes are handled via caret/layout updates.
         }
 
         /// <inheritdoc />
@@ -279,7 +335,16 @@ namespace LeXtudio.UI.Text.Core
                     _isComposing = true;
                     _context?.RaiseCompositionStarted();
                 }
-                _context?.RaiseTextUpdating(new CoreTextTextUpdatingEventArgs(text));
+
+                // Populate WinUI-compatible fields where possible. Linux IBus does not
+                // provide editor document positions here, so provide conservative
+                // defaults: range covering the preedit text and a matching new selection.
+                var args = new CoreTextTextUpdatingEventArgs(text);
+                args.Range.StartCaretPosition = 0;
+                args.Range.EndCaretPosition = text.Length;
+                args.NewSelection.StartCaretPosition = args.Range.EndCaretPosition;
+                args.NewSelection.EndCaretPosition = args.Range.EndCaretPosition;
+                _context?.RaiseTextUpdating(args);
             }
             catch (Exception ex)
             {

@@ -30,6 +30,19 @@ namespace LeXtudio.UI.Text.Core
         void NotifyFocusLeave();
 
         /// <summary>
+        /// Notify the adapter that the layout or control bounds have changed so
+        /// platform-specific layout/candidate behavior can react.
+        /// Default implementation is a no-op.
+        /// </summary>
+        void NotifyLayoutChanged() { }
+
+        /// <summary>
+        /// Notify the adapter that the selection has changed using explicit
+        /// caret positions. Default implementation is a no-op.
+        /// </summary>
+        void NotifySelectionChanged(CoreTextRange range) { }
+
+        /// <summary>
         /// Forward a key event to the platform IME. Returns true if the IME consumed the key.
         /// On platforms without native IME key forwarding this returns false.
         /// </summary>

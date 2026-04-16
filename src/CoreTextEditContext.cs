@@ -11,6 +11,11 @@ namespace LeXtudio.UI.Text.Core
     public sealed class CoreTextEditContext : IDisposable
     {
         private readonly IPlatformTextInputAdapter _adapter;
+        /// <summary>
+        /// Input scope hint for the platform IME. Mirrors WinUI's CoreTextInputScope.
+        /// Consumers may set this to inform platform keyboards/IMEs of the expected input.
+        /// </summary>
+        public CoreTextInputScope InputScope { get; set; } = CoreTextInputScope.Default;
 
         /// <summary>Initializes a context with no platform adapter (useful for testing).</summary>
         public CoreTextEditContext()
@@ -42,10 +47,10 @@ namespace LeXtudio.UI.Text.Core
         public event EventHandler<CoreTextLayoutRequestedEventArgs>? LayoutRequested;
 
         /// <summary>Occurs when IME composition starts.</summary>
-        public event EventHandler? CompositionStarted;
+        public event EventHandler<CoreTextEditContext, CoreTextCompositionStartedEventArgs>? CompositionStarted;
 
         /// <summary>Occurs when IME composition completes.</summary>
-        public event EventHandler? CompositionCompleted;
+        public event EventHandler<CoreTextEditContext, CoreTextCompositionCompletedEventArgs>? CompositionCompleted;
 
         /// <summary>Occurs when focus is removed from the text context.</summary>
         public event EventHandler? FocusRemoved;
@@ -76,6 +81,18 @@ namespace LeXtudio.UI.Text.Core
 
         /// <summary>Notify the platform that this context has lost keyboard focus.</summary>
         public void NotifyFocusLeave() => _adapter.NotifyFocusLeave();
+
+        /// <summary>
+        /// Notify the platform adapter that layout bounds or control geometry changed.
+        /// Mirrors WinUI's `NotifyLayoutChanged` semantics.
+        /// </summary>
+        public void NotifyLayoutChanged() => _adapter.NotifyLayoutChanged();
+
+        /// <summary>
+        /// Notify the platform adapter that the selection changed using explicit caret positions.
+        /// Mirrors WinUI's `NotifySelectionChanged` semantics.
+        /// </summary>
+        public void NotifySelectionChanged(CoreTextRange range) => _adapter.NotifySelectionChanged(range);
 
         /// <summary>
         /// Forward a key event to the platform IME for processing.
@@ -109,10 +126,10 @@ namespace LeXtudio.UI.Text.Core
         public void RaiseLayoutRequested(CoreTextLayoutRequestedEventArgs e) => LayoutRequested?.Invoke(this, e);
 
         /// <summary>Raise the <see cref="CompositionStarted"/> event.</summary>
-        public void RaiseCompositionStarted() => CompositionStarted?.Invoke(this, EventArgs.Empty);
+        public void RaiseCompositionStarted() => CompositionStarted?.Invoke(this, new CoreTextCompositionStartedEventArgs());
 
         /// <summary>Raise the <see cref="CompositionCompleted"/> event.</summary>
-        public void RaiseCompositionCompleted() => CompositionCompleted?.Invoke(this, EventArgs.Empty);
+        public void RaiseCompositionCompleted() => CompositionCompleted?.Invoke(this, new CoreTextCompositionCompletedEventArgs());
 
         /// <summary>Raise the <see cref="FocusRemoved"/> event.</summary>
         public void RaiseFocusRemoved() => FocusRemoved?.Invoke(this, EventArgs.Empty);
