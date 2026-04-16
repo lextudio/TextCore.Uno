@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented in this file. This project follows the "Keep a Changelog" format.
 
+## [v0.2.1] - 2026-04-15
+
+- Added missing native dependency.
+
 ## [v0.2.0] - 2026-04-14
 
 - Added a quick sample with custom text box.

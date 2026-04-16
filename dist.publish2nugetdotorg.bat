@@ -13,18 +13,27 @@ if "%~1"=="" (
 
 pushd "%~dp0"
 
-:: locate nuget.exe: prefer tools\nuget.exe, otherwise require nuget on PATH
+:: locate nuget.exe: prefer tools\nuget.exe, otherwise try to download it, then fallback to PATH
 if exist "tools\nuget.exe" (
   set "NUGETEXE=%~dp0tools\nuget.exe"
 ) else (
-  where nuget.exe >nul 2>&1
+  if not exist "tools" mkdir "tools"
+  echo nuget.exe not found in tools\; attempting to download from https://dist.nuget.org...
+  powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+    "try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; (New-Object System.Net.WebClient).DownloadFile('https://dist.nuget.org/win-x86-commandline/latest/nuget.exe','%~dp0tools\\nuget.exe'); exit 0 } catch { exit 1 }"
   if errorlevel 1 (
-    echo ERROR: nuget.exe not found in PATH and not present in tools\.
-    echo Please download nuget.exe from https://www.nuget.org/downloads and place it in tools\ or add to PATH.
-    popd
-    exit /b 1
+    echo Automatic download failed; checking PATH for nuget.exe...
+    where nuget.exe >nul 2>&1
+    if errorlevel 1 (
+      echo ERROR: nuget.exe not found in PATH and not present in tools\.
+      echo Please download nuget.exe from https://www.nuget.org/downloads and place it in tools\ or add to PATH.
+      popd
+      exit /b 1
+    ) else (
+      for /f "delims=" %%i in ('where nuget.exe') do set "NUGETEXE=%%i" & goto :foundnuget
+    )
   ) else (
-    for /f "delims=" %%i in ('where nuget.exe') do set "NUGETEXE=%%i" & goto :foundnuget
+    set "NUGETEXE=%~dp0tools\nuget.exe"
   )
 )
 :foundnuget
@@ -34,6 +43,17 @@ if not exist "%PKGDIR%\*.nupkg" (
   echo No .nupkg files found in %PKGDIR%
   popd
   exit /b 1
+)
+
+:: Sign packages (Windows) using helper script if present
+if exist "%~dp0sign-existing-nupkgs.ps1" (
+  echo Signing packages under %PKGDIR% ...
+  pwsh -NoProfile -ExecutionPolicy Bypass -File "%~dp0sign-existing-nupkgs.ps1" -PackagesDir "%PKGDIR%" -PreferDotnetSign
+  if errorlevel 1 (
+    echo Signing failed.
+    popd
+    exit /b 1
+  )
 )
 
 for %%F in ("%PKGDIR%\*.nupkg") do (
