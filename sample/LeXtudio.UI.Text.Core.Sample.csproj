@@ -7,6 +7,8 @@
     <ApplicationId>com.lextudio.coretext.sample</ApplicationId>
     <UnoFeatures>SkiaRenderer</UnoFeatures>
     <UseNuGetPackage>true</UseNuGetPackage>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(UseNuGetPackage)' != 'true'">
@@ -15,6 +17,11 @@
 
   <ItemGroup Condition="'$(UseNuGetPackage)' == 'true'">
     <PackageReference Include="LeXtudio.UI.Text.Core" Version="0.2.1" />
+  </ItemGroup>
+
+  <!-- Pin patched Tmds.DBus.Protocol to avoid NU1903 vulnerability warning -->
+  <ItemGroup>
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.3" />
   </ItemGroup>
 
   <!-- If the native macOS IME bridge was built in the core project, copy it to this sample's output so

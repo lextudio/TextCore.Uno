@@ -192,7 +192,8 @@ public sealed class CoreTextBox : UserControl, IDisposable
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
-        Dispose();
+        // Ensure deterministic cleanup when unloaded.
+        DisposeCore();
     }
 
     private void OnGotFocus(object sender, RoutedEventArgs e)
@@ -907,7 +908,8 @@ public sealed class CoreTextBox : UserControl, IDisposable
         UpdateDisplay();
     }
 
-    public void Dispose()
+    // Centralized cleanup implementation called from the explicit IDisposable impl and Unloaded handler.
+    private void DisposeCore()
     {
         if (_context is not null)
         {
@@ -924,5 +926,11 @@ public sealed class CoreTextBox : UserControl, IDisposable
             _caretTimer = null;
         }
         catch { }
+    }
+
+    // Implement IDisposable explicitly to avoid hiding base class members.
+    void IDisposable.Dispose()
+    {
+        DisposeCore();
     }
 }
