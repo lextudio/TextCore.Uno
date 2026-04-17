@@ -32,9 +32,9 @@
 
   <ItemGroup>
     <!-- Use repository README -->
-    <None Include="..\README.md" Pack="true" PackagePath="/" />
+    <None Include="../README.md" Pack="true" PackagePath="/" />
     <!-- Include repository LICENSE in package root -->
-    <None Include="..\LICENSE" Pack="true" PackagePath="/" />
+    <None Include="../LICENSE" Pack="true" PackagePath="/" />
     <None Include="buildTransitive/LeXtudio.UI.Text.Core.targets" Pack="true" PackagePath="buildTransitive/LeXtudio.UI.Text.Core.targets" />
   </ItemGroup>
 
@@ -62,8 +62,17 @@
           DependsOnTargets="BuildTextCoreMacInputBridge"
           Condition="'$(OS)' == 'Unix' and Exists('/System/Library/Frameworks/AppKit.framework') and Exists('$(TextCoreMacInputOutput)')">
     <ItemGroup>
+      <!-- Copy native dylib to direct output and runtime-specific directories for NuGet consumers -->
       <ContentWithTargetPath Include="$(TextCoreMacInputOutput)">
         <TargetPath>libUnoEditMacInput.dylib</TargetPath>
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </ContentWithTargetPath>
+      <ContentWithTargetPath Include="$(TextCoreMacInputOutput)">
+        <TargetPath>runtimes/osx-arm64/native/libUnoEditMacInput.dylib</TargetPath>
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </ContentWithTargetPath>
+      <ContentWithTargetPath Include="$(TextCoreMacInputOutput)">
+        <TargetPath>runtimes/osx-x64/native/libUnoEditMacInput.dylib</TargetPath>
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       </ContentWithTargetPath>
     </ItemGroup>
