@@ -38,6 +38,11 @@ namespace LeXtudio.UI.Text.Core
         private WndProcDelegate? _wndProcDelegate; // prevent GC
         private CoreTextEditContext? _context;
         private bool _disposed;
+        private bool _isComposing;
+        private int _selectionStart;
+        private int _selectionEnd;
+        private int _compositionStart;
+        private int _compositionLength;
 
         // Current caret rectangle in device-independent pixels (window-relative).
         private double _caretX;
@@ -99,6 +104,20 @@ namespace LeXtudio.UI.Text.Core
         public void NotifyFocusLeave() { }
 
         /// <inheritdoc />
+        public void NotifySelectionChanged(CoreTextRange range)
+        {
+            if (range is null)
+            {
+                _selectionStart = 0;
+                _selectionEnd = 0;
+                return;
+            }
+
+            _selectionStart = Math.Min(range.StartCaretPosition, range.EndCaretPosition);
+            _selectionEnd = Math.Max(range.StartCaretPosition, range.EndCaretPosition);
+        }
+
+        /// <inheritdoc />
         public void Dispose()
         {
             if (_disposed)
@@ -133,6 +152,9 @@ namespace LeXtudio.UI.Text.Core
             {
                 case WM_IME_STARTCOMPOSITION:
                     Log("WM_IME_STARTCOMPOSITION");
+                    _compositionStart = _selectionStart;
+                    _compositionLength = Math.Max(0, _selectionEnd - _selectionStart);
+                    _isComposing = true;
                     _context?.RaiseCompositionStarted();
                     return nint.Zero;
 
@@ -142,6 +164,8 @@ namespace LeXtudio.UI.Text.Core
 
                 case WM_IME_ENDCOMPOSITION:
                     Log("WM_IME_ENDCOMPOSITION");
+                    _isComposing = false;
+                    _compositionLength = 0;
                     _context?.RaiseCompositionCompleted();
                     break;
             }
@@ -158,7 +182,25 @@ namespace LeXtudio.UI.Text.Core
                 string comp = GetCompositionString(GCS_COMPSTR);
                 Log($"GCS_COMPSTR: '{comp}'");
                 PositionImeWindow();
-                _context?.RaiseTextUpdating(new CoreTextTextUpdatingEventArgs(comp));
+                if (!_isComposing)
+                {
+                    _compositionStart = _selectionStart;
+                    _compositionLength = Math.Max(0, _selectionEnd - _selectionStart);
+                    _isComposing = true;
+                    _context?.RaiseCompositionStarted();
+                }
+
+                int rangeStart = _compositionStart;
+                int rangeEnd = _compositionStart + _compositionLength;
+                var args = new CoreTextTextUpdatingEventArgs(comp);
+                args.Range.StartCaretPosition = rangeStart;
+                args.Range.EndCaretPosition = rangeEnd;
+                args.NewSelection.StartCaretPosition = rangeStart + comp.Length;
+                args.NewSelection.EndCaretPosition = rangeStart + comp.Length;
+                _compositionLength = comp.Length;
+                _selectionStart = args.NewSelection.StartCaretPosition;
+                _selectionEnd = args.NewSelection.EndCaretPosition;
+                _context?.RaiseTextUpdating(args);
             }
 
             if ((flags & GCS_RESULTSTR) != 0)
@@ -167,8 +209,18 @@ namespace LeXtudio.UI.Text.Core
                 Log($"GCS_RESULTSTR: '{result}'");
                 if (!string.IsNullOrEmpty(result))
                 {
-                    var request = new CoreTextTextRequest(result);
-                    _context?.RaiseTextRequested(new CoreTextTextRequestedEventArgs(request));
+                    int rangeStart = _isComposing ? _compositionStart : _selectionStart;
+                    int rangeEnd = _isComposing ? (_compositionStart + _compositionLength) : _selectionEnd;
+                    var args = new CoreTextTextUpdatingEventArgs(result);
+                    args.Range.StartCaretPosition = rangeStart;
+                    args.Range.EndCaretPosition = rangeEnd;
+                    args.NewSelection.StartCaretPosition = rangeStart + result.Length;
+                    args.NewSelection.EndCaretPosition = rangeStart + result.Length;
+                    _selectionStart = args.NewSelection.StartCaretPosition;
+                    _selectionEnd = args.NewSelection.EndCaretPosition;
+                    _compositionLength = 0;
+                    _isComposing = false;
+                    _context?.RaiseTextUpdating(args);
                 }
             }
         }
