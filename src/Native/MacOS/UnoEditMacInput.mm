@@ -9,6 +9,8 @@
 #import <limits.h>
 
 typedef void (*unoedit_insert_text_fn)(void* context, const char* text);
+typedef void (*unoedit_set_marked_text_fn)(void* context, const char* text, int selectedStart, int selectedLength, int replacementStart, int replacementLength);
+typedef void (*unoedit_unmark_text_fn)(void* context);
 typedef void (*unoedit_command_fn)(void* context, const char* command);
 
 static BOOL unoedit_debug_enabled(void)
@@ -50,10 +52,25 @@ static void unoedit_log(NSString* format, ...)
     }
 }
 
+static int unoedit_range_value(NSUInteger value)
+{
+    if (value == NSNotFound) {
+        return -1;
+    }
+
+    if (value > (NSUInteger)INT_MAX) {
+        return INT_MAX;
+    }
+
+    return (int)value;
+}
+
 @interface UnoEditInputTextView : NSTextView
 
 @property(assign) void* managedContext;
 @property(assign) unoedit_insert_text_fn insertTextCallback;
+@property(assign) unoedit_set_marked_text_fn setMarkedTextCallback;
+@property(assign) unoedit_unmark_text_fn unmarkTextCallback;
 @property(assign) unoedit_command_fn commandCallback;
 @property(assign) NSRect imeCaretRectInWindow;
 
@@ -172,12 +189,25 @@ static void unoedit_log(NSString* format, ...)
         ? [(NSAttributedString*)string string]
         : (NSString*)string;
     unoedit_log(@"setMarkedText text=%@ selectedRange=%@ replacementRange=%@", marked, NSStringFromRange(selectedRange), NSStringFromRange(replacementRange));
+    if (self.setMarkedTextCallback != NULL) {
+        const char* utf8 = marked != nil ? marked.UTF8String : "";
+        self.setMarkedTextCallback(
+            self.managedContext,
+            utf8,
+            unoedit_range_value(selectedRange.location),
+            unoedit_range_value(selectedRange.length),
+            unoedit_range_value(replacementRange.location),
+            unoedit_range_value(replacementRange.length));
+    }
     [super setMarkedText:string selectedRange:selectedRange replacementRange:replacementRange];
 }
 
 - (void)unmarkText
 {
     unoedit_log(@"unmarkText");
+    if (self.unmarkTextCallback != NULL) {
+        self.unmarkTextCallback(self.managedContext);
+    }
     [super unmarkText];
 }
 
@@ -297,7 +327,13 @@ static void unoedit_log(NSString* format, ...)
 
 extern "C" {
 
-void* unoedit_ime_create(void* windowHandle, void* managedContext, unoedit_insert_text_fn insertTextCallback, unoedit_command_fn commandCallback)
+void* unoedit_ime_create(
+    void* windowHandle,
+    void* managedContext,
+    unoedit_insert_text_fn insertTextCallback,
+    unoedit_set_marked_text_fn setMarkedTextCallback,
+    unoedit_unmark_text_fn unmarkTextCallback,
+    unoedit_command_fn commandCallback)
 {
     NSWindow* window = (__bridge NSWindow*)windowHandle;
     if (window == nil || window.contentView == nil) {
@@ -310,6 +346,8 @@ void* unoedit_ime_create(void* windowHandle, void* managedContext, unoedit_inser
     bridge.textView = [[UnoEditInputTextView alloc] initWithFrame:NSMakeRect(0, 0, 2, 18)];
     bridge.textView.managedContext = managedContext;
     bridge.textView.insertTextCallback = insertTextCallback;
+    bridge.textView.setMarkedTextCallback = setMarkedTextCallback;
+    bridge.textView.unmarkTextCallback = unmarkTextCallback;
     bridge.textView.commandCallback = commandCallback;
     [window.contentView addSubview:bridge.textView];
     bridge.keyEventMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskKeyDown handler:^NSEvent * _Nullable(NSEvent * _Nonnull event) {

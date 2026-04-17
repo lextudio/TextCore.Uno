@@ -16,6 +16,8 @@ namespace LeXtudio.UI.Text.Core
         private static long s_nextEventId;
 
         private readonly InsertTextDelegate _insertTextDelegate;
+        private readonly SetMarkedTextDelegate _setMarkedTextDelegate;
+        private readonly UnmarkTextDelegate _unmarkTextDelegate;
         private readonly CommandDelegate _commandDelegate;
 
         private CoreTextEditContext? _context;
@@ -28,10 +30,15 @@ namespace LeXtudio.UI.Text.Core
         private double _lastCaretH;
         private int _selectionStart;
         private int _selectionEnd;
+        private bool _isComposing;
+        private int _compositionStart;
+        private int _compositionLength;
 
         public MacOSTextInputAdapter()
         {
             _insertTextDelegate = OnInsertText;
+            _setMarkedTextDelegate = OnSetMarkedText;
+            _unmarkTextDelegate = OnUnmarkText;
             _commandDelegate = OnCommand;
         }
 
@@ -54,6 +61,8 @@ namespace LeXtudio.UI.Text.Core
                     windowHandle,
                     managedContext,
                     Marshal.GetFunctionPointerForDelegate(_insertTextDelegate),
+                    Marshal.GetFunctionPointerForDelegate(_setMarkedTextDelegate),
+                    Marshal.GetFunctionPointerForDelegate(_unmarkTextDelegate),
                     Marshal.GetFunctionPointerForDelegate(_commandDelegate));
 
                 if (_bridgeHandle == nint.Zero)
@@ -232,8 +241,16 @@ namespace LeXtudio.UI.Text.Core
                 return;
             }
 
+            adapter.SyncSelectionFromContext();
+
             int rangeStart = adapter._selectionStart;
             int rangeEnd = adapter._selectionEnd;
+            if (adapter._isComposing)
+            {
+                rangeStart = adapter._compositionStart;
+                rangeEnd = adapter._compositionStart + adapter._compositionLength;
+            }
+
             var args = new CoreTextTextUpdatingEventArgs(text);
             args.Range.StartCaretPosition = rangeStart;
             args.Range.EndCaretPosition = rangeEnd;
@@ -242,6 +259,138 @@ namespace LeXtudio.UI.Text.Core
             adapter._selectionStart = args.NewSelection.StartCaretPosition;
             adapter._selectionEnd = args.NewSelection.EndCaretPosition;
             adapter._context.RaiseTextUpdating(args);
+
+            adapter._isComposing = false;
+            adapter._compositionLength = 0;
+            adapter._context.RaiseCompositionCompleted();
+        }
+
+        private static void OnSetMarkedText(
+            nint context,
+            nint utf8Text,
+            int selectedStart,
+            int selectedLength,
+            int replacementStart,
+            int replacementLength)
+        {
+            if (GCHandle.FromIntPtr(context).Target is not MacOSTextInputAdapter adapter || adapter._context == null)
+            {
+                return;
+            }
+
+            adapter.SyncSelectionFromContext();
+
+            string text = Marshal.PtrToStringUTF8(utf8Text) ?? string.Empty;
+            if (string.IsNullOrEmpty(text))
+            {
+                if (adapter._isComposing)
+                {
+                    var clearArgs = new CoreTextTextUpdatingEventArgs(string.Empty);
+                    clearArgs.Range.StartCaretPosition = adapter._compositionStart;
+                    clearArgs.Range.EndCaretPosition = adapter._compositionStart + adapter._compositionLength;
+                    clearArgs.NewSelection.StartCaretPosition = adapter._compositionStart;
+                    clearArgs.NewSelection.EndCaretPosition = adapter._compositionStart;
+                    adapter._selectionStart = adapter._compositionStart;
+                    adapter._selectionEnd = adapter._compositionStart;
+                    adapter._compositionLength = 0;
+                    adapter._context.RaiseTextUpdating(clearArgs);
+                    adapter._isComposing = false;
+                    adapter._context.RaiseCompositionCompleted();
+                }
+
+                return;
+            }
+
+            bool replacementSpecified = replacementStart >= 0 && replacementLength >= 0;
+            if (adapter._isComposing)
+            {
+                int compositionEnd = adapter._compositionStart + adapter._compositionLength;
+                bool selectionOutsideComposition =
+                    adapter._selectionStart < adapter._compositionStart
+                    || adapter._selectionStart > compositionEnd
+                    || adapter._selectionEnd < adapter._compositionStart
+                    || adapter._selectionEnd > compositionEnd;
+
+                if (selectionOutsideComposition)
+                {
+                    adapter._isComposing = false;
+                    adapter._compositionLength = 0;
+                    adapter._context.RaiseCompositionCompleted();
+                }
+            }
+
+            if (!adapter._isComposing)
+            {
+                int start = Math.Min(adapter._selectionStart, adapter._selectionEnd);
+                int end = Math.Max(adapter._selectionStart, adapter._selectionEnd);
+                if (replacementSpecified)
+                {
+                    start = replacementStart;
+                    end = replacementStart + replacementLength;
+                }
+
+                adapter._compositionStart = start;
+                adapter._compositionLength = Math.Max(0, end - start);
+                adapter._isComposing = true;
+                adapter._context.RaiseCompositionStarted();
+            }
+
+            int selectionInMarkedStart = selectedStart < 0
+                ? text.Length
+                : Math.Clamp(selectedStart, 0, text.Length);
+            int selectionInMarkedEnd = Math.Clamp(
+                selectionInMarkedStart + Math.Max(0, selectedLength),
+                selectionInMarkedStart,
+                text.Length);
+
+            var args = new CoreTextTextUpdatingEventArgs(text);
+            args.Range.StartCaretPosition = adapter._compositionStart;
+            args.Range.EndCaretPosition = adapter._compositionStart + adapter._compositionLength;
+            args.NewSelection.StartCaretPosition = adapter._compositionStart + selectionInMarkedStart;
+            args.NewSelection.EndCaretPosition = adapter._compositionStart + selectionInMarkedEnd;
+            adapter._compositionLength = text.Length;
+            adapter._selectionStart = args.NewSelection.StartCaretPosition;
+            adapter._selectionEnd = args.NewSelection.EndCaretPosition;
+            adapter._context.RaiseTextUpdating(args);
+        }
+
+        private void SyncSelectionFromContext()
+        {
+            if (_context is null)
+            {
+                return;
+            }
+
+            try
+            {
+                var request = new CoreTextSelectionRequest();
+                _context.RaiseSelectionRequested(new CoreTextSelectionRequestedEventArgs(request));
+                int start = Math.Min(request.StartCaretPosition, request.EndCaretPosition);
+                int end = Math.Max(request.StartCaretPosition, request.EndCaretPosition);
+                _selectionStart = start;
+                _selectionEnd = end;
+            }
+            catch
+            {
+                // Ignore failures and keep last known adapter selection.
+            }
+        }
+
+        private static void OnUnmarkText(nint context)
+        {
+            if (GCHandle.FromIntPtr(context).Target is not MacOSTextInputAdapter adapter || adapter._context == null)
+            {
+                return;
+            }
+
+            if (!adapter._isComposing)
+            {
+                return;
+            }
+
+            adapter._isComposing = false;
+            adapter._compositionLength = 0;
+            adapter._context.RaiseCompositionCompleted();
         }
 
         private static void OnCommand(nint context, nint utf8Command)
@@ -293,6 +442,18 @@ namespace LeXtudio.UI.Text.Core
         private delegate void InsertTextDelegate(nint context, nint utf8Text);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate void SetMarkedTextDelegate(
+            nint context,
+            nint utf8Text,
+            int selectedStart,
+            int selectedLength,
+            int replacementStart,
+            int replacementLength);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate void UnmarkTextDelegate(nint context);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         private delegate void CommandDelegate(nint context, nint utf8Command);
 
         private static class NativeMethods
@@ -302,6 +463,8 @@ namespace LeXtudio.UI.Text.Core
                 nint windowHandle,
                 nint managedContext,
                 nint insertTextCallback,
+                nint setMarkedTextCallback,
+                nint unmarkTextCallback,
                 nint commandCallback);
 
             [DllImport("libUnoEditMacInput.dylib", CallingConvention = CallingConvention.Cdecl)]
