@@ -24,6 +24,7 @@ namespace LeXtudio.UI.Text.Core
         private int _selectionEnd;
         private int _compositionStart;
         private int _compositionLength;
+        private bool _compositionAwaitingCommit;
         private nint _x11Display;
         private nint _x11Window;
         private double _lastCaretX;
@@ -270,9 +271,21 @@ namespace LeXtudio.UI.Text.Core
                     case "HidePreeditText":
                         _isComposing = false;
                         _compositionLength = 0;
+                        // HidePreeditText indicates composition is finished without commit.
+                        // Finalize immediately.
+                        _compositionAwaitingCommit = false;
                         _context?.RaiseCompositionCompleted();
                         break;
                 }
+            }
+
+            // If an UpdatePreeditText cleared the preedit (empty text) and we
+            // deferred finalization waiting for a CommitText, finalize now.
+            if (_compositionAwaitingCommit)
+            {
+                _compositionAwaitingCommit = false;
+                _compositionLength = 0;
+                _context?.RaiseCompositionCompleted();
             }
         }
 
@@ -306,8 +319,22 @@ namespace LeXtudio.UI.Text.Core
                 Log($"HandleCommitText: text='{text}'");
                 if (!string.IsNullOrEmpty(text))
                 {
-                    int rangeStart = _isComposing ? _compositionStart : _selectionStart;
-                    int rangeEnd = _isComposing ? (_compositionStart + _compositionLength) : _selectionEnd;
+                    int rangeStart;
+                    int rangeEnd;
+
+                    if (_isComposing || _compositionAwaitingCommit)
+                    {
+                        // Replace the last composition range (even if we deferred
+                        // finalization due to an empty preedit signal arriving
+                        // before the CommitText).
+                        rangeStart = _compositionStart;
+                        rangeEnd = _compositionStart + _compositionLength;
+                    }
+                    else
+                    {
+                        rangeStart = _selectionStart;
+                        rangeEnd = _selectionEnd;
+                    }
 
                     var args = new CoreTextTextUpdatingEventArgs(text);
                     args.Range.StartCaretPosition = rangeStart;
@@ -319,6 +346,7 @@ namespace LeXtudio.UI.Text.Core
                     _selectionStart = args.NewSelection.StartCaretPosition;
                     _selectionEnd = args.NewSelection.EndCaretPosition;
                     _isComposing = false;
+                    _compositionAwaitingCommit = false;
                     _compositionLength = 0;
                     _context?.RaiseCompositionCompleted();
                 }
@@ -350,10 +378,15 @@ namespace LeXtudio.UI.Text.Core
                 {
                     if (_isComposing)
                     {
+                        // IME cleared the preedit text. Defer finalization briefly
+                        // to allow a subsequent CommitText message to replace the
+                        // preedit rather than inserting again (prevents duplicates).
                         _isComposing = false;
-                        _compositionLength = 0;
-                        _context?.RaiseCompositionCompleted();
+                        _compositionAwaitingCommit = true;
+                        // Do not raise CompositionCompleted here; it will be raised
+                        // after a CommitText or at the end of DrainSignals.
                     }
+
                     return;
                 }
 
