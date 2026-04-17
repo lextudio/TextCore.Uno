@@ -1,4 +1,8 @@
 using System;
+using System.Reflection;
+using System.Runtime.InteropServices;
+using Microsoft.UI.Xaml;
+using Uno.UI.Xaml;
 
 namespace LeXtudio.UI.Text.Core
 {
@@ -16,6 +20,13 @@ namespace LeXtudio.UI.Text.Core
         /// Consumers may set this to inform platform keyboards/IMEs of the expected input.
         /// </summary>
         public CoreTextInputScope InputScope { get; set; } = CoreTextInputScope.Default;
+
+        /// <summary>
+        /// Rasterization scale used when converting logical caret coordinates to
+        /// pixel coordinates in platform adapters that require it.
+        /// Defaults to 1.0.
+        /// </summary>
+        public double RasterizationScale { get; set; } = 1.0;
 
         /// <summary>Initializes a context with no platform adapter (useful for testing).</summary>
         public CoreTextEditContext()
@@ -60,21 +71,48 @@ namespace LeXtudio.UI.Text.Core
 
         // ----- Lifecycle (called by the host application) -----
 
+        private bool Attach(nint windowHandle, nint displayHandle = 0) => _adapter.Attach(windowHandle, displayHandle, this);
+
         /// <summary>
-        /// Attach this context to the given native window handle so the platform
+        /// Attach this context to the current native window so the platform
         /// adapter can start listening for IME events.
         /// </summary>
-        /// <param name="windowHandle">The native window handle (HWND, NSWindow*, X11 window id).</param>
-        /// <param name="displayHandle">The native display handle (X11 Display* on Linux, 0 on other platforms).</param>
+        /// <param name="window">The current window instance used to resolve native handles.</param>
         /// <returns><c>true</c> if the adapter attached successfully.</returns>
-        public bool Attach(nint windowHandle, nint displayHandle = 0) => _adapter.Attach(windowHandle, displayHandle, this);
+        public bool AttachToCurrentWindow(Window? window)
+        {
+            nint windowHandle = nint.Zero;
+            nint displayHandle = nint.Zero;
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                TryGetX11Handles(window, out displayHandle, out windowHandle);
+            }
+
+            if (windowHandle == nint.Zero)
+            {
+                windowHandle = TryGetNativeWindowHandle(window);
+            }
+
+            return Attach(windowHandle, displayHandle);
+        }
 
         /// <summary>
         /// Notify the platform that the caret rectangle has changed so the IME
         /// candidate window can be repositioned.
+        /// Uses <see cref="RasterizationScale"/> for adapters that require scale.
         /// </summary>
-        public void NotifyCaretRectChanged(double x, double y, double width, double height, double scale = 1.0)
-            => _adapter.NotifyCaretRectChanged(x, y, width, height, scale);
+        public void NotifyCaretRectChanged(double x, double y, double width, double height)
+            => _adapter.NotifyCaretRectChanged(x, y, width, height, RasterizationScale);
+
+        /// <summary>
+        /// Notify the platform that the caret rectangle has changed and update
+        /// <see cref="RasterizationScale"/> in one call.
+        /// </summary>
+        public void NotifyCaretRectChanged(double x, double y, double width, double height, double scale)
+        {
+            RasterizationScale = scale;
+            _adapter.NotifyCaretRectChanged(x, y, width, height, scale);
+        }
 
         /// <summary>Notify the platform that this context has received keyboard focus.</summary>
         public void NotifyFocusEnter() => _adapter.NotifyFocusEnter();
@@ -136,5 +174,119 @@ namespace LeXtudio.UI.Text.Core
 
         /// <summary>Raise the <see cref="CommandReceived"/> event.</summary>
         public void RaiseCommandReceived(CoreTextCommandReceivedEventArgs e) => CommandReceived?.Invoke(this, e);
+
+        private static nint TryGetNativeWindowHandle(Window? window)
+        {
+            if (window is null)
+            {
+                return System.Diagnostics.Process.GetCurrentProcess().MainWindowHandle;
+            }
+
+            object? nativeWindow = WindowHelper.GetNativeWindow(window);
+            if (nativeWindow is null)
+            {
+                return nint.Zero;
+            }
+
+            string nativeTypeName = nativeWindow.GetType().FullName ?? string.Empty;
+            if (nativeTypeName == "System.Windows.Window")
+            {
+                try
+                {
+                    Type? helperType = Type.GetType(
+                        "System.Windows.Interop.WindowInteropHelper, PresentationFramework, Version=4.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35");
+                    helperType ??= Type.GetType("System.Windows.Interop.WindowInteropHelper, PresentationFramework");
+                    if (helperType is null)
+                    {
+                        return nint.Zero;
+                    }
+
+                    object? helper = Activator.CreateInstance(helperType, nativeWindow);
+                    PropertyInfo? handleProp = helperType.GetProperty("Handle", BindingFlags.Instance | BindingFlags.Public);
+                    return ToNativeHandle(handleProp?.GetValue(helper));
+                }
+                catch
+                {
+                    return nint.Zero;
+                }
+            }
+
+            foreach (string name in new[] { "Hwnd", "HWnd", "Handle", "WindowHandle", "NativeHandle", "Pointer", "hwnd", "_hwnd" })
+            {
+                PropertyInfo? p = nativeWindow.GetType().GetProperty(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                if (p is not null)
+                {
+                    nint handle = ToNativeHandle(p.GetValue(nativeWindow));
+                    if (handle != nint.Zero)
+                    {
+                        return handle;
+                    }
+                }
+
+                FieldInfo? f = nativeWindow.GetType().GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                if (f is not null)
+                {
+                    nint handle = ToNativeHandle(f.GetValue(nativeWindow));
+                    if (handle != nint.Zero)
+                    {
+                        return handle;
+                    }
+                }
+            }
+
+            return nint.Zero;
+        }
+
+        private static void TryGetX11Handles(Window? window, out nint display, out nint nativeWindow)
+        {
+            display = nint.Zero;
+            nativeWindow = nint.Zero;
+
+            try
+            {
+                if (window is null)
+                {
+                    return;
+                }
+
+                var hostType = Type.GetType("Uno.WinUI.Runtime.Skia.X11.X11XamlRootHost, Uno.UI.Runtime.Skia.X11");
+                if (hostType is null)
+                {
+                    return;
+                }
+
+                var getHost = hostType.GetMethod("GetHostFromWindow", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+                var host = getHost?.Invoke(null, new object[] { window });
+                if (host is null)
+                {
+                    return;
+                }
+
+                var rootX11WindowProp = hostType.GetProperty("RootX11Window", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                var x11Window = rootX11WindowProp?.GetValue(host);
+                if (x11Window is null)
+                {
+                    return;
+                }
+
+                var windowType = x11Window.GetType();
+                display = ToNativeHandle(windowType.GetProperty("Display", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(x11Window));
+                nativeWindow = ToNativeHandle(windowType.GetProperty("Window", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(x11Window));
+            }
+            catch
+            {
+            }
+        }
+
+        private static nint ToNativeHandle(object? value)
+        {
+            return value switch
+            {
+                IntPtr handle => handle,
+                long handle => new nint(handle),
+                int handle => new nint(handle),
+                _ => nint.Zero,
+            };
+        }
     }
 }

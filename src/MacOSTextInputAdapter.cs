@@ -26,6 +26,8 @@ namespace LeXtudio.UI.Text.Core
         private double _lastCaretY;
         private double _lastCaretW;
         private double _lastCaretH;
+        private int _selectionStart;
+        private int _selectionEnd;
 
         public MacOSTextInputAdapter()
         {
@@ -133,11 +135,20 @@ namespace LeXtudio.UI.Text.Core
         }
 
         /// <summary>
-        /// Selection-changed notification — macOS adapter has no special action here.
+        /// Track the current editor selection so committed text can be reported
+        /// with WinUI-like range and new-selection payloads.
         /// </summary>
         public void NotifySelectionChanged(CoreTextRange range)
         {
-            // No-op; selection changes are handled via caret/layout updates.
+            if (range is null)
+            {
+                _selectionStart = 0;
+                _selectionEnd = 0;
+                return;
+            }
+
+            _selectionStart = Math.Min(range.StartCaretPosition, range.EndCaretPosition);
+            _selectionEnd = Math.Max(range.StartCaretPosition, range.EndCaretPosition);
         }
 
         /// <inheritdoc />
@@ -221,9 +232,16 @@ namespace LeXtudio.UI.Text.Core
                 return;
             }
 
-            // Committed text from AppKit IME.
-            var request = new CoreTextTextRequest(text);
-            adapter._context.RaiseTextRequested(new CoreTextTextRequestedEventArgs(request));
+            int rangeStart = adapter._selectionStart;
+            int rangeEnd = adapter._selectionEnd;
+            var args = new CoreTextTextUpdatingEventArgs(text);
+            args.Range.StartCaretPosition = rangeStart;
+            args.Range.EndCaretPosition = rangeEnd;
+            args.NewSelection.StartCaretPosition = rangeStart + text.Length;
+            args.NewSelection.EndCaretPosition = rangeStart + text.Length;
+            adapter._selectionStart = args.NewSelection.StartCaretPosition;
+            adapter._selectionEnd = args.NewSelection.EndCaretPosition;
+            adapter._context.RaiseTextUpdating(args);
         }
 
         private static void OnCommand(nint context, nint utf8Command)

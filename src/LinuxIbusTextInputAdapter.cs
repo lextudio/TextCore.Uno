@@ -20,6 +20,10 @@ namespace LeXtudio.UI.Text.Core
         private CoreTextEditContext? _context;
         private bool _disposed;
         private bool _isComposing;
+        private int _selectionStart;
+        private int _selectionEnd;
+        private int _compositionStart;
+        private int _compositionLength;
         private nint _x11Display;
         private nint _x11Window;
         private double _lastCaretX;
@@ -136,11 +140,20 @@ namespace LeXtudio.UI.Text.Core
         }
 
         /// <summary>
-        /// Selection-changed notification — Linux adapter has no special action.
+        /// Track the current editor selection so preedit/commit updates can emit
+        /// WinUI-like range and new-selection payloads.
         /// </summary>
         public void NotifySelectionChanged(CoreTextRange range)
         {
-            // No-op for now; selection changes are handled via caret/layout updates.
+            if (range is null)
+            {
+                _selectionStart = 0;
+                _selectionEnd = 0;
+                return;
+            }
+
+            _selectionStart = Math.Min(range.StartCaretPosition, range.EndCaretPosition);
+            _selectionEnd = Math.Max(range.StartCaretPosition, range.EndCaretPosition);
         }
 
         /// <inheritdoc />
@@ -255,6 +268,8 @@ namespace LeXtudio.UI.Text.Core
                         HandleUpdatePreeditText(msg);
                         break;
                     case "HidePreeditText":
+                        _isComposing = false;
+                        _compositionLength = 0;
                         _context?.RaiseCompositionCompleted();
                         break;
                 }
@@ -291,9 +306,20 @@ namespace LeXtudio.UI.Text.Core
                 Log($"HandleCommitText: text='{text}'");
                 if (!string.IsNullOrEmpty(text))
                 {
+                    int rangeStart = _isComposing ? _compositionStart : _selectionStart;
+                    int rangeEnd = _isComposing ? (_compositionStart + _compositionLength) : _selectionEnd;
+
+                    var args = new CoreTextTextUpdatingEventArgs(text);
+                    args.Range.StartCaretPosition = rangeStart;
+                    args.Range.EndCaretPosition = rangeEnd;
+                    args.NewSelection.StartCaretPosition = rangeStart + text.Length;
+                    args.NewSelection.EndCaretPosition = rangeStart + text.Length;
+                    _context?.RaiseTextUpdating(args);
+
+                    _selectionStart = args.NewSelection.StartCaretPosition;
+                    _selectionEnd = args.NewSelection.EndCaretPosition;
                     _isComposing = false;
-                    var request = new CoreTextTextRequest(text);
-                    _context?.RaiseTextRequested(new CoreTextTextRequestedEventArgs(request));
+                    _compositionLength = 0;
                     _context?.RaiseCompositionCompleted();
                 }
             }
@@ -325,6 +351,7 @@ namespace LeXtudio.UI.Text.Core
                     if (_isComposing)
                     {
                         _isComposing = false;
+                        _compositionLength = 0;
                         _context?.RaiseCompositionCompleted();
                     }
                     return;
@@ -333,17 +360,19 @@ namespace LeXtudio.UI.Text.Core
                 if (!_isComposing)
                 {
                     _isComposing = true;
+                    _compositionStart = _selectionStart;
+                    _compositionLength = Math.Max(0, _selectionEnd - _selectionStart);
                     _context?.RaiseCompositionStarted();
                 }
 
-                // Populate WinUI-compatible fields where possible. Linux IBus does not
-                // provide editor document positions here, so provide conservative
-                // defaults: range covering the preedit text and a matching new selection.
                 var args = new CoreTextTextUpdatingEventArgs(text);
-                args.Range.StartCaretPosition = 0;
-                args.Range.EndCaretPosition = text.Length;
-                args.NewSelection.StartCaretPosition = args.Range.EndCaretPosition;
-                args.NewSelection.EndCaretPosition = args.Range.EndCaretPosition;
+                args.Range.StartCaretPosition = _compositionStart;
+                args.Range.EndCaretPosition = _compositionStart + _compositionLength;
+                args.NewSelection.StartCaretPosition = _compositionStart + text.Length;
+                args.NewSelection.EndCaretPosition = _compositionStart + text.Length;
+                _compositionLength = text.Length;
+                _selectionStart = args.NewSelection.StartCaretPosition;
+                _selectionEnd = args.NewSelection.EndCaretPosition;
                 _context?.RaiseTextUpdating(args);
             }
             catch (Exception ex)
