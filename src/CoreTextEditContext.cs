@@ -6,6 +6,9 @@ using Uno.UI.Xaml;
 
 namespace LeXtudio.UI.Text.Core
 {
+#if NET9_0
+    public delegate void EventHandler<TSender, TEventArgs>(TSender sender, TEventArgs e);
+#endif
     /// <summary>
     /// Central event hub that raises text, selection, layout and composition events
     /// for adapters and editor hosts.

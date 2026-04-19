@@ -6,7 +6,7 @@
     <PropertyGroup>
       <!-- Try NuGet package location first, then project reference build output -->
       <LeXtudioMacDylibPath Condition="Exists('$(MSBuildThisFileDirectory)../../runtimes/osx/native/libUnoEditMacInput.dylib')">$(MSBuildThisFileDirectory)../../runtimes/osx/native/libUnoEditMacInput.dylib</LeXtudioMacDylibPath>
-      <LeXtudioMacDylibPath Condition="'$(LeXtudioMacDylibPath)' == '' and Exists('$(MSBuildThisFileDirectory)../../bin/$(Configuration)/net10.0-desktop/libUnoEditMacInput.dylib')">$(MSBuildThisFileDirectory)../../bin/$(Configuration)/net10.0-desktop/libUnoEditMacInput.dylib</LeXtudioMacDylibPath>
+      <LeXtudioMacDylibPath Condition="'$(LeXtudioMacDylibPath)' == '' and Exists('$(MSBuildThisFileDirectory)../../bin/$(Configuration)/net9.0-desktop/libUnoEditMacInput.dylib')">$(MSBuildThisFileDirectory)../../bin/$(Configuration)/net9.0-desktop/libUnoEditMacInput.dylib</LeXtudioMacDylibPath>
     </PropertyGroup>
 
     <Copy SourceFiles="$(LeXtudioMacDylibPath)"

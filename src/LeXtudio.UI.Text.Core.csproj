@@ -1,8 +1,9 @@
 <Project Sdk="Uno.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0-desktop</TargetFramework>
+    <TargetFramework>net9.0-desktop</TargetFramework>
     <RootNamespace>LeXtudio.UI.Text.Core</RootNamespace>
     <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <Authors>LeXtudio</Authors>
     <Company>LeXtudio</Company>
