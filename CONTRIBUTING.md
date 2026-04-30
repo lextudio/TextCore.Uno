@@ -22,7 +22,7 @@ git submodule update --init --recursive
 When targeting macOS the project includes a tiny native helper (`libUnoEditMacInput.dylib`) that bridges AppKit text input callbacks into managed code. To build it when developing locally:
 
 ```bash
-dotnet build src/LeXtudio.UI.Text.Core.csproj -c Debug -f net10.0-desktop /t:Build,BuildTextCoreMacInputBridge
+dotnet build src/LeXtudio.UI.Text.Core.csproj -c Debug -f net9.0-desktop /t:Build,BuildTextCoreMacInputBridge
 ```
 
 The build produces `libUnoEditMacInput.dylib` under:

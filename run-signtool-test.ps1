@@ -1,5 +1,5 @@
 $P = Get-Location
-$dll = Join-Path $P.Path 'src\bin\Release\net10.0-desktop\LeXtudio.UI.Text.Core.dll'
+$dll = Join-Path $P.Path 'src\bin\Release\net9.0-desktop\LeXtudio.UI.Text.Core.dll'
 if (!(Test-Path $dll)) { Write-Host "DLL not found: $dll"; exit 2 }
 $cmd = Get-Command signtool -ErrorAction SilentlyContinue
 if ($cmd) { Write-Host "signtool found on PATH: $($cmd.Source)" ; $sig = $cmd.Source } else {

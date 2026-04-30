@@ -222,7 +222,7 @@ if (-not $usePfx -and -not [string]::IsNullOrEmpty($CertSubjectName)) {
 $binCfg = Join-Path $projectDir "bin\$Configuration"
 if (-not (Test-Path $binCfg)) { Write-ErrorAndExit "Build output directory not found: $binCfg" }
 
-$tfmFolder = Get-ChildItem -Path $binCfg -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -like 'net10*' -or $_.Name -eq 'net10.0-desktop' } | Select-Object -First 1
+$tfmFolder = Get-ChildItem -Path $binCfg -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -like 'net9*' -or $_.Name -eq 'net9.0-desktop' } | Select-Object -First 1
 if ($null -eq $tfmFolder) { $tfmFolder = Get-ChildItem -Path $binCfg -Directory -ErrorAction SilentlyContinue | Select-Object -First 1 }
 if ($null -eq $tfmFolder) { Write-ErrorAndExit "Unable to determine build TFM directory under $binCfg" }
 

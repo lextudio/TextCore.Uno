@@ -19,7 +19,7 @@ rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 
 echo "Building project and native macOS bridge..."
-dotnet build "$PROJECT" -c "$CONFIG" -f net10.0-desktop /t:Build,BuildTextCoreMacInputBridge
+dotnet build "$PROJECT" -c "$CONFIG" -f net9.0-desktop /t:Build,BuildTextCoreMacInputBridge
 
 echo "Packing nupkg(s) to $OUT_DIR (unsigned)..."
 dotnet pack "$PROJECT" -c "$CONFIG" -o "$OUT_DIR" --no-build /p:PackageVersion="$PKGVER"

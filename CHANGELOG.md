@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented in this file. This project follows the "Keep a Changelog" format.
 
+## [v0.2.6] - 2026-04-30
+
+- Downgraded to .NET 9 to widen reach.
+
 ## [v0.2.5] - 2026-04-17
 
 - Refactored to better align with Core Text APIs for Windows.
