@@ -2,9 +2,9 @@
 
 All notable changes to this project are documented in this file. This project follows the "Keep a Changelog" format.
 
-## [v0.2.7] - 2026-05-13
+## [v0.2.8] - 2026-05-13
 
-- Extended to WinUI target.
+- Moved text box control out.
 
 ## [v0.2.7] - 2026-05-13
 

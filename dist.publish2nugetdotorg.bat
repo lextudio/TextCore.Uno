@@ -3,7 +3,6 @@ REM dist.publish2nugetdotorg.bat - Push signed nupkgs to NuGet.org
 SETLOCAL ENABLEDELAYEDEXPANSION
 
 :: Usage: dist.publish2nugetdotorg.bat [nupkgFolder]
-:: Usage: dist.publish2nugetdotorg.bat [nupkgFolder]
 if "%~1"=="" (
   rem default to the script's dist folder
   set "PKGDIR=%~dp0dist"
@@ -43,17 +42,6 @@ if not exist "%PKGDIR%\*.nupkg" (
   echo No .nupkg files found in %PKGDIR%
   popd
   exit /b 1
-)
-
-:: Sign packages (Windows) using helper script if present
-if exist "%~dp0sign-existing-nupkgs.ps1" (
-  echo Signing packages under %PKGDIR% ...
-  pwsh -NoProfile -ExecutionPolicy Bypass -File "%~dp0sign-existing-nupkgs.ps1" -PackagesDir "%PKGDIR%" -PreferDotnetSign
-  if errorlevel 1 (
-    echo Signing failed.
-    popd
-    exit /b 1
-  )
 )
 
 for %%F in ("%PKGDIR%\*.nupkg") do (

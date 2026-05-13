@@ -8,20 +8,20 @@
     <UnoFeatures>SkiaRenderer</UnoFeatures>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
-    <UseNuGetPackage>true</UseNuGetPackage>
+    <UseNuGetPackage>false</UseNuGetPackage>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(UseNuGetPackage)' != 'true'">
-    <ProjectReference Include="$(MSBuildThisFileDirectory)../src/LeXtudio.UI.Text.Core.csproj" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)../LeXtudio.TextBox/LeXtudio.TextBox.csproj" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(UseNuGetPackage)' == 'true'">
-    <PackageReference Include="LeXtudio.UI.Text.Core" Version="0.2.6" />
+    <PackageReference Include="LeXtudio.TextBox" />
   </ItemGroup>
 
   <!-- Pin patched Tmds.DBus.Protocol to avoid NU1903 vulnerability warning -->
   <ItemGroup>
-    <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.3" />
+    <PackageReference Include="Tmds.DBus.Protocol" />
   </ItemGroup>
 
   <!-- If the native macOS IME bridge was built in the core project, copy it to this sample's output so

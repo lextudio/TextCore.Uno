@@ -1,6 +1,6 @@
 <Project Sdk="Uno.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>net9.0-desktop;net9.0-windows10.0.19041.0</TargetFrameworks>
+    <TargetFramework>net9.0-desktop</TargetFramework>
     <RootNamespace>LeXtudio.UI.Text.Core</RootNamespace>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
@@ -22,15 +22,6 @@
     <UnoUIDisableLongPathWarning>false</UnoUIDisableLongPathWarning>
   </PropertyGroup>
 
-    <!-- WinUI / Windows-specific properties (only applied when building the windows target) -->
-  <PropertyGroup Condition="'$(TargetFramework)' == 'net9.0-windows10.0.19041.0'">
-    <UseWinUI>true</UseWinUI>
-    <EnableWindowsTargeting>true</EnableWindowsTargeting>
-    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-    <DefineConstants>$(DefineConstants);WINDOWS_APP_SDK</DefineConstants>
-    <WindowsSdkPackageVersion>10.0.19041.57</WindowsSdkPackageVersion>
-  </PropertyGroup>
-
   <PropertyGroup Condition="'$(OS)' == 'Unix' and Exists('/System/Library/Frameworks/AppKit.framework')">
     <TextCoreMacInputSource>$(MSBuildProjectDirectory)/Native/MacOS/UnoEditMacInput.mm</TextCoreMacInputSource>
     <TextCoreMacInputOutput>$(MSBuildProjectDirectory)/bin/$(Configuration)/$(TargetFramework)/libUnoEditMacInput.dylib</TextCoreMacInputOutput>
@@ -43,11 +34,11 @@
 
   <ItemGroup>
     <!-- Use repository README -->
-    <None Include="../README.md" Pack="true" PackagePath="/" />
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
     <!-- Include repository LICENSE in package root -->
-    <None Include="../LICENSE" Pack="true" PackagePath="/" />
+    <None Include="../../LICENSE" Pack="true" PackagePath="/" />
     <!-- Include logo as package icon -->
-    <None Include="../images/company_logo_512.png" Pack="true" PackagePath="/" />
+    <None Include="../../images/company_logo_512.png" Pack="true" PackagePath="/" />
     <None Include="buildTransitive/LeXtudio.UI.Text.Core.targets" Pack="true" PackagePath="buildTransitive/LeXtudio.UI.Text.Core.targets" />
   </ItemGroup>
 
@@ -59,12 +50,6 @@
 
   <ItemGroup>
     <PackageReference Include="GitVersion.MsBuild" PrivateAssets="All" />
-  </ItemGroup>
-
-  <!-- WinUI-specific package references and pages (only for the windows TargetFramework) -->
-  <ItemGroup Condition="'$(TargetFramework)' == 'net9.0-windows10.0.19041.0'">
-    <PackageReference Include="Microsoft.WindowsAppSDK" />
-    <Compile Include="Controls\LeXtudioTextBoxStub.cs" />
   </ItemGroup>
 
   <Target Name="EnsureMacNativeBridgeForPack" BeforeTargets="Pack" DependsOnTargets="BuildTextCoreMacInputBridge">

@@ -1,0 +1,54 @@
+<Project Sdk="Uno.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net9.0-desktop;net9.0-windows10.0.19041.0</TargetFrameworks>
+    <RootNamespace>LeXtudio.UI.Controls</RootNamespace>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Authors>LeXtudio</Authors>
+    <Company>LeXtudio</Company>
+    <Version>$(GitVersion_SemVer)</Version>
+    <Description>A TextBox control with CoreText IME bridge for Uno Platform, with a native WinUI pass-through on Windows.</Description>
+    <PackageId>LeXtudio.TextBox</PackageId>
+    <IsPackable>true</IsPackable>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>company_logo_512.png</PackageIcon>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <UnoUIDisableLongPathWarning>false</UnoUIDisableLongPathWarning>
+  </PropertyGroup>
+
+  <!-- WinUI / Windows-specific properties -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net9.0-windows10.0.19041.0'">
+    <UseWinUI>true</UseWinUI>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <DefineConstants>$(DefineConstants);WINDOWS_APP_SDK</DefineConstants>
+    <WindowsSdkPackageVersion>10.0.19041.57</WindowsSdkPackageVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="/" />
+    <None Include="../../LICENSE" Pack="true" PackagePath="/" />
+    <None Include="../../images/company_logo_512.png" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="GitVersion.MsBuild" PrivateAssets="All" />
+  </ItemGroup>
+
+  <!-- WinUI-specific: Windows App SDK and the thin wrapper stub -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net9.0-windows10.0.19041.0'">
+    <PackageReference Include="Microsoft.WindowsAppSDK" />
+    <Compile Include="Controls\LeXtudioTextBoxStub.cs" />
+  </ItemGroup>
+
+  <!-- Uno-specific: reference the CoreText IME bridge -->
+  <ItemGroup Condition="'$(TargetFramework)' != 'net9.0-windows10.0.19041.0'">
+    <ProjectReference Include="../LeXtudio.UI.Text.Core/LeXtudio.UI.Text.Core.csproj" />
+  </ItemGroup>
+</Project>

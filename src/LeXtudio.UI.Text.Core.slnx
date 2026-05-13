@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="LeXtudio.UI.Text.Core/LeXtudio.UI.Text.Core.csproj" />
+  <Project Path="LeXtudio.TextBox/LeXtudio.TextBox.csproj" />
+  <Project Path="LeXtudio.TextBox.Sample/LeXtudio.TextBox.Sample.csproj" />
+</Solution>
