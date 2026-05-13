@@ -113,6 +113,7 @@ public sealed class TextBox : UserControl, IDisposable
             Header = Header,
             AcceptsReturn = AcceptsReturn,
             TextWrapping = TextWrapping,
+            Padding = Padding,
         };
 
         _textBox.TextChanged += OnTextBoxTextChanged;
@@ -128,6 +129,8 @@ public sealed class TextBox : UserControl, IDisposable
             _textBox.Background = ((TextBox)d).Background);
         RegisterPropertyChangedCallback(ForegroundProperty, (d, _) =>
             _textBox.Foreground = ((TextBox)d).Foreground);
+        RegisterPropertyChangedCallback(PaddingProperty, (d, _) =>
+            _textBox.Padding = ((TextBox)d).Padding);
 
         HorizontalContentAlignment = HorizontalAlignment.Stretch;
         VerticalContentAlignment = VerticalAlignment.Stretch;
