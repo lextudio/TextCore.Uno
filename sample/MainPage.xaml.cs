@@ -9,11 +9,12 @@ public sealed partial class MainPage : Page
     public MainPage()
     {
         this.InitializeComponent();
-        this.Loaded += MainPage_Loaded;
+        this.SizeChanged += OnPageSizeChanged;
     }
 
-    private void MainPage_Loaded(object? sender, RoutedEventArgs e)
+    private void OnPageSizeChanged(object sender, SizeChangedEventArgs e)
     {
-        Console.WriteLine("CoreText Sample: MainPage loaded");
+        ImeTextBox.Width = e.NewSize.Width;
+        ImeTextBox.Height = e.NewSize.Height;
     }
 }

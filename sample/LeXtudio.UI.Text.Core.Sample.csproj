@@ -6,9 +6,9 @@
     <ApplicationTitle>LeXtudio CoreText Sample</ApplicationTitle>
     <ApplicationId>com.lextudio.coretext.sample</ApplicationId>
     <UnoFeatures>SkiaRenderer</UnoFeatures>
-    <UseNuGetPackage>true</UseNuGetPackage>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
+    <UseNuGetPackage>true</UseNuGetPackage>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(UseNuGetPackage)' != 'true'">
@@ -16,7 +16,7 @@
   </ItemGroup>
 
   <ItemGroup Condition="'$(UseNuGetPackage)' == 'true'">
-    <PackageReference Include="LeXtudio.UI.Text.Core" Version="0.2.1" />
+    <PackageReference Include="LeXtudio.UI.Text.Core" Version="0.2.6" />
   </ItemGroup>
 
   <!-- Pin patched Tmds.DBus.Protocol to avoid NU1903 vulnerability warning -->

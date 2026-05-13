@@ -27,9 +27,9 @@ env UNOEDIT_DEBUG_IME=1 dotnet run -c Debug -f net10.0-desktop
 ## What it demonstrates
 
 - Create a `CoreTextEditContext` via `CoreTextServicesManager` and attach it to
-  a native window handle (best-effort). See
-  [external/coretext/sample/Controls/CoreTextBox.cs](external/coretext/sample/Controls/CoreTextBox.cs)
-  for implementation details.
+  the current native window. See
+  [external/coretext/sample/Controls/ImeTextBox.cs](external/coretext/sample/Controls/ImeTextBox.cs)
+  for the recommended no-Uno-source-patch wrapper approach.
 - Subscribe to `TextUpdating`, `TextRequested`, `CompositionStarted`,
   `CompositionCompleted`, and `CommandReceived` to receive AppKit selector
   commands such as `deleteBackward:`.
@@ -50,6 +50,6 @@ env UNOEDIT_DEBUG_IME=1 dotnet run -c Debug -f net10.0-desktop
   `CommandReceived`, so Backspace and Delete work correctly during normal
   editing and IME composition.
 
-This sample keeps the visual and editing model intentionally minimal. Its goal
-is to illustrate the IME input flow, platform adapter wiring, and the small
-platform-specific details required for correct candidate window positioning.
+This sample keeps Uno's built-in `TextBox` for the visual/editing surface and
+uses CoreText only as the platform IME bridge. This is the recommended approach
+when Uno itself cannot be source-patched.

@@ -5,7 +5,13 @@
     xmlns:local="using:LeXtudio.UI.Text.Core.Sample.Controls"
     Background="White">
 
-    <Grid Padding="4" HorizontalAlignment="Center" VerticalAlignment="Center" Height="Auto">
-        <local:CoreTextBox x:Name="CoreTextBox" />
+    <Grid>
+        <local:ImeTextBox x:Name="ImeTextBox"
+                          AcceptsReturn="True"
+                          TextWrapping="Wrap"
+                          HorizontalAlignment="Stretch"
+                          VerticalAlignment="Stretch"
+                          Text="Some text here..." />
     </Grid>
+
 </Page>
