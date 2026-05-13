@@ -51,6 +51,13 @@ public sealed class TextBox : UserControl, IDisposable
             typeof(TextBox),
             new PropertyMetadata(TextWrapping.NoWrap, OnTextWrappingPropertyChanged));
 
+    public static readonly DependencyProperty PlaceholderForegroundProperty =
+        DependencyProperty.Register(
+            nameof(PlaceholderForeground),
+            typeof(Brush),
+            typeof(TextBox),
+            new PropertyMetadata(null, OnPlaceholderForegroundPropertyChanged));
+
     private readonly Microsoft.UI.Xaml.Controls.TextBox _textBox;
     private LeXtudio.UI.Text.Core.CoreTextEditContext? _context;
     private bool _isApplyingImeText;
@@ -90,6 +97,12 @@ public sealed class TextBox : UserControl, IDisposable
         set => SetValue(TextWrappingProperty, value);
     }
 
+    public Brush? PlaceholderForeground
+    {
+        get => (Brush?)GetValue(PlaceholderForegroundProperty);
+        set => SetValue(PlaceholderForegroundProperty, value);
+    }
+
     public TextBox()
     {
         _textBox = new Microsoft.UI.Xaml.Controls.TextBox
@@ -111,6 +124,10 @@ public sealed class TextBox : UserControl, IDisposable
 
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
+        RegisterPropertyChangedCallback(BackgroundProperty, (d, _) =>
+            _textBox.Background = ((TextBox)d).Background);
+        RegisterPropertyChangedCallback(ForegroundProperty, (d, _) =>
+            _textBox.Foreground = ((TextBox)d).Foreground);
 
         HorizontalContentAlignment = HorizontalAlignment.Stretch;
         VerticalContentAlignment = VerticalAlignment.Stretch;
@@ -156,6 +173,12 @@ public sealed class TextBox : UserControl, IDisposable
     {
         var control = (TextBox)d;
         control._textBox.TextWrapping = (TextWrapping)e.NewValue;
+    }
+
+    private static void OnPlaceholderForegroundPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        var control = (TextBox)d;
+        control._textBox.PlaceholderForeground = e.NewValue as Brush;
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -498,6 +521,8 @@ public sealed class TextBox : UserControl, IDisposable
         _compositionStart = 0;
         _compositionLength = 0;
     }
+
+    public void SelectAll() => SelectRange(0, _textBox.Text?.Length ?? 0);
 
     private void SelectRange(int start, int length)
     {
