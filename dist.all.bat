@@ -29,16 +29,8 @@ echo Restoring packages...
 dotnet restore "%PROJECT%"
 if errorlevel 1 exit /b 1
 
-echo Building Uno desktop target...
-dotnet build "%PROJECT%" -c %CONFIG% -f net9.0-desktop
-if errorlevel 1 exit /b 1
-
-echo Building WinUI (Windows) target...
-dotnet build "%PROJECT%" -c %CONFIG% -f net9.0-windows10.0.19041.0
-if errorlevel 1 exit /b 1
-
 echo Packing nupkg to %OUT_DIR%...
-dotnet pack "%PROJECT%" -c %CONFIG% -o "%OUT_DIR%" --no-build /p:PackageVersion=%PKGVER%
+dotnet pack "%PROJECT%" -c %CONFIG% -o "%OUT_DIR%" /p:PackageVersion=%PKGVER%
 if errorlevel 1 exit /b 1
 
 echo.
