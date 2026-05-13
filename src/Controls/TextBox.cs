@@ -1,3 +1,4 @@
+#if !WINDOWS_APP_SDK
 using System;
 using System.Diagnostics;
 using System.Reflection;
@@ -628,3 +629,4 @@ public sealed class TextBox : UserControl, IDisposable
         }
     }
 }
+#endif

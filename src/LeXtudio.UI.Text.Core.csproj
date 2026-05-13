@@ -1,6 +1,6 @@
 <Project Sdk="Uno.Sdk">
   <PropertyGroup>
-    <TargetFramework>net9.0-desktop</TargetFramework>
+    <TargetFrameworks>net9.0-desktop;net9.0-windows10.0.19041.0</TargetFrameworks>
     <RootNamespace>LeXtudio.UI.Text.Core</RootNamespace>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
@@ -20,6 +20,15 @@
     <Deterministic>true</Deterministic>
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
     <UnoUIDisableLongPathWarning>false</UnoUIDisableLongPathWarning>
+  </PropertyGroup>
+
+    <!-- WinUI / Windows-specific properties (only applied when building the windows target) -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net9.0-windows10.0.19041.0'">
+    <UseWinUI>true</UseWinUI>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <DefineConstants>$(DefineConstants);WINDOWS_APP_SDK</DefineConstants>
+    <WindowsSdkPackageVersion>10.0.19041.57</WindowsSdkPackageVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(OS)' == 'Unix' and Exists('/System/Library/Frameworks/AppKit.framework')">
@@ -46,6 +55,16 @@
     <None Include="$(MacImeDylibPath)" Pack="true" PackagePath="runtimes/osx/native/libUnoEditMacInput.dylib" />
     <None Include="$(MacImeDylibPath)" Pack="true" PackagePath="runtimes/osx-x64/native/libUnoEditMacInput.dylib" />
     <None Include="$(MacImeDylibPath)" Pack="true" PackagePath="runtimes/osx-arm64/native/libUnoEditMacInput.dylib" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="GitVersion.MsBuild" PrivateAssets="All" />
+  </ItemGroup>
+
+  <!-- WinUI-specific package references and pages (only for the windows TargetFramework) -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net9.0-windows10.0.19041.0'">
+    <PackageReference Include="Microsoft.WindowsAppSDK" />
+    <Compile Include="Controls\LeXtudioTextBoxStub.cs" />
   </ItemGroup>
 
   <Target Name="EnsureMacNativeBridgeForPack" BeforeTargets="Pack" DependsOnTargets="BuildTextCoreMacInputBridge">
