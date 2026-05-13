@@ -8,53 +8,51 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Windows.Foundation;
 using Windows.System;
-using LeXtudio.UI.Text.Core;
 
-namespace LeXtudio.UI.Text.Core.Sample.Controls;
+namespace LeXtudio.UI.Controls;
 
 /// <summary>
-/// Demonstrates the recommended no-Uno-source-patch approach: keep Uno's built-in
-/// TextBox for rendering/editing and use CoreTextEditContext only as an IME bridge.
+/// A TextBox with a CoreTextEditContext IME bridge for correct IME input on all Uno platforms.
 /// </summary>
-public sealed class ImeTextBox : UserControl, IDisposable
+public sealed class TextBox : UserControl, IDisposable
 {
     public static readonly DependencyProperty TextProperty =
         DependencyProperty.Register(
             nameof(Text),
             typeof(string),
-            typeof(ImeTextBox),
+            typeof(TextBox),
             new PropertyMetadata(string.Empty, OnTextPropertyChanged));
 
     public static readonly DependencyProperty PlaceholderTextProperty =
         DependencyProperty.Register(
             nameof(PlaceholderText),
             typeof(string),
-            typeof(ImeTextBox),
+            typeof(TextBox),
             new PropertyMetadata("Type here...", OnPlaceholderTextPropertyChanged));
 
     public static readonly DependencyProperty HeaderProperty =
         DependencyProperty.Register(
             nameof(Header),
             typeof(object),
-            typeof(ImeTextBox),
+            typeof(TextBox),
             new PropertyMetadata(null, OnHeaderPropertyChanged));
 
     public static readonly DependencyProperty AcceptsReturnProperty =
         DependencyProperty.Register(
             nameof(AcceptsReturn),
             typeof(bool),
-            typeof(ImeTextBox),
+            typeof(TextBox),
             new PropertyMetadata(false, OnAcceptsReturnPropertyChanged));
 
     public static readonly DependencyProperty TextWrappingProperty =
         DependencyProperty.Register(
             nameof(TextWrapping),
             typeof(TextWrapping),
-            typeof(ImeTextBox),
+            typeof(TextBox),
             new PropertyMetadata(TextWrapping.NoWrap, OnTextWrappingPropertyChanged));
 
-    private readonly TextBox _textBox;
-    private CoreTextEditContext? _context;
+    private readonly Microsoft.UI.Xaml.Controls.TextBox _textBox;
+    private LeXtudio.UI.Text.Core.CoreTextEditContext? _context;
     private bool _isApplyingImeText;
     private bool _isComposing;
     private int _compositionStart;
@@ -92,9 +90,9 @@ public sealed class ImeTextBox : UserControl, IDisposable
         set => SetValue(TextWrappingProperty, value);
     }
 
-    public ImeTextBox()
+    public TextBox()
     {
-        _textBox = new TextBox
+        _textBox = new Microsoft.UI.Xaml.Controls.TextBox
         {
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Stretch,
@@ -127,7 +125,7 @@ public sealed class ImeTextBox : UserControl, IDisposable
 
     private static void OnTextPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
-        var control = (ImeTextBox)d;
+        var control = (TextBox)d;
         string text = e.NewValue as string ?? string.Empty;
 
         if (control._textBox.Text != text)
@@ -138,25 +136,25 @@ public sealed class ImeTextBox : UserControl, IDisposable
 
     private static void OnPlaceholderTextPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
-        var control = (ImeTextBox)d;
+        var control = (TextBox)d;
         control._textBox.PlaceholderText = e.NewValue as string ?? string.Empty;
     }
 
     private static void OnHeaderPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
-        var control = (ImeTextBox)d;
+        var control = (TextBox)d;
         control._textBox.Header = e.NewValue;
     }
 
     private static void OnAcceptsReturnPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
-        var control = (ImeTextBox)d;
+        var control = (TextBox)d;
         control._textBox.AcceptsReturn = (bool)e.NewValue;
     }
 
     private static void OnTextWrappingPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
-        var control = (ImeTextBox)d;
+        var control = (TextBox)d;
         control._textBox.TextWrapping = (TextWrapping)e.NewValue;
     }
 
@@ -185,7 +183,7 @@ public sealed class ImeTextBox : UserControl, IDisposable
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"ImeTextBox focus enter failed: {ex}");
+            Debug.WriteLine($"TextBox focus enter failed: {ex}");
         }
     }
 
@@ -199,7 +197,7 @@ public sealed class ImeTextBox : UserControl, IDisposable
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"ImeTextBox focus leave failed: {ex}");
+            Debug.WriteLine($"TextBox focus leave failed: {ex}");
         }
     }
 
@@ -245,7 +243,7 @@ public sealed class ImeTextBox : UserControl, IDisposable
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"ImeTextBox ProcessKeyEvent failed: {ex}");
+            Debug.WriteLine($"TextBox ProcessKeyEvent failed: {ex}");
         }
     }
 
@@ -258,8 +256,8 @@ public sealed class ImeTextBox : UserControl, IDisposable
 
         try
         {
-            _context = CoreTextServicesManager.GetForCurrentView().CreateEditContext();
-            _context.InputScope = CoreTextInputScope.Text;
+            _context = LeXtudio.UI.Text.Core.CoreTextServicesManager.GetForCurrentView().CreateEditContext();
+            _context.InputScope = LeXtudio.UI.Text.Core.CoreTextInputScope.Text;
             _context.TextRequested += OnTextRequested;
             _context.TextUpdating += OnTextUpdating;
             _context.SelectionRequested += OnSelectionRequested;
@@ -271,12 +269,12 @@ public sealed class ImeTextBox : UserControl, IDisposable
             _context.CommandReceived += OnCommandReceived;
 
             bool attached = _context.AttachToCurrentWindow(Window.Current);
-            Debug.WriteLine($"ImeTextBox attached CoreTextEditContext: {attached}");
+            Debug.WriteLine($"TextBox attached CoreTextEditContext: {attached}");
             return attached;
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"ImeTextBox context initialization failed: {ex}");
+            Debug.WriteLine($"TextBox context initialization failed: {ex}");
             DisposeContext();
             return false;
         }
@@ -302,7 +300,7 @@ public sealed class ImeTextBox : UserControl, IDisposable
         _context = null;
     }
 
-    private void OnTextRequested(CoreTextEditContext sender, CoreTextTextRequestedEventArgs args)
+    private void OnTextRequested(LeXtudio.UI.Text.Core.CoreTextEditContext sender, LeXtudio.UI.Text.Core.CoreTextTextRequestedEventArgs args)
     {
         string text = _textBox.Text ?? string.Empty;
         int start = Math.Clamp(args.Request.Range.StartCaretPosition, 0, text.Length);
@@ -310,7 +308,7 @@ public sealed class ImeTextBox : UserControl, IDisposable
         args.Request.Text = text.Substring(start, end - start);
     }
 
-    private void OnTextUpdating(CoreTextEditContext sender, CoreTextTextUpdatingEventArgs args)
+    private void OnTextUpdating(LeXtudio.UI.Text.Core.CoreTextEditContext sender, LeXtudio.UI.Text.Core.CoreTextTextUpdatingEventArgs args)
     {
         if (_textBox.IsReadOnly)
         {
@@ -338,16 +336,16 @@ public sealed class ImeTextBox : UserControl, IDisposable
         SyncPlatformState();
     }
 
-    private void OnSelectionRequested(CoreTextEditContext sender, CoreTextSelectionRequestedEventArgs args)
+    private void OnSelectionRequested(LeXtudio.UI.Text.Core.CoreTextEditContext sender, LeXtudio.UI.Text.Core.CoreTextSelectionRequestedEventArgs args)
     {
-        args.Request.Selection = new CoreTextRange
+        args.Request.Selection = new LeXtudio.UI.Text.Core.CoreTextRange
         {
             StartCaretPosition = _textBox.SelectionStart,
             EndCaretPosition = _textBox.SelectionStart + _textBox.SelectionLength,
         };
     }
 
-    private void OnSelectionUpdating(CoreTextEditContext sender, CoreTextSelectionUpdatingEventArgs args)
+    private void OnSelectionUpdating(LeXtudio.UI.Text.Core.CoreTextEditContext sender, LeXtudio.UI.Text.Core.CoreTextSelectionUpdatingEventArgs args)
     {
         int length = _textBox.Text?.Length ?? 0;
         int start = Math.Clamp(args.Selection.StartCaretPosition, 0, length);
@@ -356,19 +354,19 @@ public sealed class ImeTextBox : UserControl, IDisposable
         SyncPlatformState();
     }
 
-    private void OnLayoutRequested(CoreTextEditContext sender, CoreTextLayoutRequestedEventArgs args)
+    private void OnLayoutRequested(LeXtudio.UI.Text.Core.CoreTextEditContext sender, LeXtudio.UI.Text.Core.CoreTextLayoutRequestedEventArgs args)
     {
         Rect caret = CalculateCaretRectInWindow();
         Rect control = CalculateElementRectInWindow(_textBox);
 
-        args.Request.LayoutBounds.TextBounds = new CoreTextRect
+        args.Request.LayoutBounds.TextBounds = new LeXtudio.UI.Text.Core.CoreTextRect
         {
             X = caret.X,
             Y = caret.Y,
             Width = caret.Width,
             Height = caret.Height,
         };
-        args.Request.LayoutBounds.ControlBounds = new CoreTextRect
+        args.Request.LayoutBounds.ControlBounds = new LeXtudio.UI.Text.Core.CoreTextRect
         {
             X = control.X,
             Y = control.Y,
@@ -377,24 +375,24 @@ public sealed class ImeTextBox : UserControl, IDisposable
         };
     }
 
-    private void OnCompositionStarted(CoreTextEditContext sender, CoreTextCompositionStartedEventArgs args)
+    private void OnCompositionStarted(LeXtudio.UI.Text.Core.CoreTextEditContext sender, LeXtudio.UI.Text.Core.CoreTextCompositionStartedEventArgs args)
     {
         _isComposing = true;
         _compositionStart = _textBox.SelectionStart;
         _compositionLength = _textBox.SelectionLength;
     }
 
-    private void OnCompositionCompleted(CoreTextEditContext sender, CoreTextCompositionCompletedEventArgs args)
+    private void OnCompositionCompleted(LeXtudio.UI.Text.Core.CoreTextEditContext sender, LeXtudio.UI.Text.Core.CoreTextCompositionCompletedEventArgs args)
     {
         EndComposition();
     }
 
-    private void OnFocusRemoved(CoreTextEditContext sender, object args)
+    private void OnFocusRemoved(LeXtudio.UI.Text.Core.CoreTextEditContext sender, object args)
     {
         _textBox.Focus(FocusState.Unfocused);
     }
 
-    private void OnCommandReceived(object? sender, CoreTextCommandReceivedEventArgs args)
+    private void OnCommandReceived(object? sender, LeXtudio.UI.Text.Core.CoreTextCommandReceivedEventArgs args)
     {
         bool handled = args.Command switch
         {
@@ -523,7 +521,7 @@ public sealed class ImeTextBox : UserControl, IDisposable
             Rect caret = CalculateCaretRectInWindow();
             _context.RasterizationScale = scale;
             _context.NotifyLayoutChanged();
-            _context.NotifySelectionChanged(new CoreTextRange
+            _context.NotifySelectionChanged(new LeXtudio.UI.Text.Core.CoreTextRange
             {
                 StartCaretPosition = _textBox.SelectionStart,
                 EndCaretPosition = _textBox.SelectionStart + _textBox.SelectionLength,
@@ -532,7 +530,7 @@ public sealed class ImeTextBox : UserControl, IDisposable
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"ImeTextBox state sync failed: {ex}");
+            Debug.WriteLine($"TextBox state sync failed: {ex}");
         }
     }
 

@@ -2,11 +2,11 @@
     x:Class="LeXtudio.UI.Text.Core.Sample.MainPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:local="using:LeXtudio.UI.Text.Core.Sample.Controls"
+    xmlns:lextudio="using:LeXtudio.UI.Controls"
     Background="White">
 
     <Grid>
-        <local:ImeTextBox x:Name="ImeTextBox"
+        <lextudio:TextBox x:Name="ImeTextBox"
                           AcceptsReturn="True"
                           TextWrapping="Wrap"
                           HorizontalAlignment="Stretch"
