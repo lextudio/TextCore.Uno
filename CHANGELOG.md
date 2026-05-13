@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file. This project fo
 
 ## [v0.2.7] - 2026-05-13
 
+- Extended to WinUI target.
+
+## [v0.2.7] - 2026-05-13
+
 - Added a text box control.
 
 ## [v0.2.6] - 2026-04-30
