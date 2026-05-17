@@ -104,6 +104,9 @@ public sealed class TextBox : UserControl, IDisposable
     /// <summary>Raised for Ctrl+B/I/U before the inner platform text box can mutate the selection.</summary>
     public event EventHandler<TextFormattingAcceleratorRequestedEventArgs>? FormattingAcceleratorRequested;
 
+    /// <summary>Raised for editor commands that should be handled by a document owner.</summary>
+    public event EventHandler<TextEditingCommandRequestedEventArgs>? EditingCommandRequested;
+
     /// <summary>Selection start (caret index). Mirrors Microsoft.UI.Xaml.Controls.TextBox.SelectionStart.</summary>
     public int SelectionStart
     {
@@ -243,6 +246,8 @@ public sealed class TextBox : UserControl, IDisposable
         AddFormattingKeyboardAccelerator(VirtualKey.B);
         AddFormattingKeyboardAccelerator(VirtualKey.I);
         AddFormattingKeyboardAccelerator(VirtualKey.U);
+        AddEditingKeyboardAccelerator(VirtualKey.Z, TextEditingCommand.Undo);
+        AddEditingKeyboardAccelerator(VirtualKey.Y, TextEditingCommand.Redo);
         _textBox.SizeChanged += (_, _) => SyncPlatformState();
 
         Loaded += OnLoaded;
@@ -601,6 +606,12 @@ public sealed class TextBox : UserControl, IDisposable
         AddFormattingKeyboardAccelerator(key, addToInnerTextBox: false);
     }
 
+    private void AddEditingKeyboardAccelerator(VirtualKey key, TextEditingCommand command)
+    {
+        AddEditingKeyboardAccelerator(key, command, addToInnerTextBox: true);
+        AddEditingKeyboardAccelerator(key, command, addToInnerTextBox: false);
+    }
+
     private void AddFormattingKeyboardAccelerator(VirtualKey key, bool addToInnerTextBox)
     {
         var accelerator = new KeyboardAccelerator
@@ -616,6 +627,21 @@ public sealed class TextBox : UserControl, IDisposable
             KeyboardAccelerators.Add(accelerator);
     }
 
+    private void AddEditingKeyboardAccelerator(VirtualKey key, TextEditingCommand command, bool addToInnerTextBox)
+    {
+        var accelerator = new KeyboardAccelerator
+        {
+            Key = key,
+            Modifiers = VirtualKeyModifiers.Control,
+        };
+        accelerator.Invoked += (_, args) => OnEditingKeyboardAcceleratorInvoked(command, args);
+
+        if (addToInnerTextBox)
+            _textBox.KeyboardAccelerators.Add(accelerator);
+        else
+            KeyboardAccelerators.Add(accelerator);
+    }
+
     private void OnFormattingKeyboardAcceleratorInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
         LogDiagnostic($"KeyboardAccelerator invoked key={sender.Key} handledIn={args.Handled} selection={_textBox.SelectionStart}+{_textBox.SelectionLength}");
@@ -624,6 +650,25 @@ public sealed class TextBox : UserControl, IDisposable
             args.Handled = true;
             LogDiagnostic($"KeyboardAccelerator handled key={sender.Key}");
         }
+    }
+
+    private void OnEditingKeyboardAcceleratorInvoked(TextEditingCommand command, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        LogDiagnostic($"EditingKeyboardAccelerator invoked command={command} handledIn={args.Handled} selection={_textBox.SelectionStart}+{_textBox.SelectionLength}");
+        if (TryHandleEditingCommand(command))
+        {
+            args.Handled = true;
+            LogDiagnostic($"EditingKeyboardAccelerator handled command={command}");
+        }
+    }
+
+    private bool TryHandleEditingCommand(TextEditingCommand command)
+    {
+        var args = new TextEditingCommandRequestedEventArgs(command);
+        LogDiagnostic($"EditingCommand request={command} subscribers={EditingCommandRequested is not null}");
+        EditingCommandRequested?.Invoke(this, args);
+        LogDiagnostic($"EditingCommand handled={args.Handled}");
+        return args.Handled;
     }
 
     private static bool IsKeyDown(VirtualKey key)
@@ -822,6 +867,8 @@ public sealed class TextBox : UserControl, IDisposable
             "toggleBoldface:" => TryHandleFormattingAccelerator(VirtualKey.B),
             "toggleItalics:" => TryHandleFormattingAccelerator(VirtualKey.I),
             "toggleUnderline:" => TryHandleFormattingAccelerator(VirtualKey.U),
+            "undo:" => TryHandleEditingCommand(TextEditingCommand.Undo),
+            "redo:" => TryHandleEditingCommand(TextEditingCommand.Redo),
             _ => false,
         };
 
@@ -1035,11 +1082,29 @@ public enum TextFormattingAccelerator
     Underline,
 }
 
+/// <summary>Document-owner editing commands raised by <see cref="TextBox"/>.</summary>
+public enum TextEditingCommand
+{
+    /// <summary>Undo the previous document edit.</summary>
+    Undo,
+    /// <summary>Redo the previous undone document edit.</summary>
+    Redo,
+}
+
 public sealed class TextFormattingAcceleratorRequestedEventArgs(TextFormattingAccelerator accelerator, int selectionStart, int selectionLength) : EventArgs
 {
     public TextFormattingAccelerator Accelerator { get; } = accelerator;
     public int SelectionStart { get; } = selectionStart;
     public int SelectionLength { get; } = selectionLength;
+    public bool Handled { get; set; }
+}
+
+/// <summary>Provides data for document-owner editing command requests.</summary>
+public sealed class TextEditingCommandRequestedEventArgs(TextEditingCommand command) : EventArgs
+{
+    /// <summary>The requested editing command.</summary>
+    public TextEditingCommand Command { get; } = command;
+    /// <summary>Gets or sets whether the command was handled by the document owner.</summary>
     public bool Handled { get; set; }
 }
 #endif
