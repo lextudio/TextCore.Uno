@@ -5,6 +5,6 @@
     <PackageVersion Include="Microsoft.WindowsAppSDK" Version="1.8.260317003" />
     <PackageVersion Include="GitVersion.MsBuild" Version="5.12.0" />
     <PackageVersion Include="LeXtudio.UI.Text.Core" Version="0.2.8" />
-    <PackageVersion Include="LeXtudio.TextBox" Version="0.2.8" />
+    <PackageVersion Include="LeXtudio.TextBox" Version="0.2.10" />
   </ItemGroup>
 </Project>
