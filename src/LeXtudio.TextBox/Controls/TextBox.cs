@@ -1,6 +1,7 @@
 #if !WINDOWS_APP_SDK
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Reflection;
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
@@ -65,11 +66,22 @@ public sealed class TextBox : UserControl, IDisposable
     private bool _isComposing;
     private int _compositionStart;
     private int _compositionLength;
+    private bool _suppressNextFormattingControlEdit;
+    private bool _isRestoringFormattingControlEdit;
+    private string _textBeforeFormattingAccelerator = string.Empty;
+    private int _selectionStartBeforeFormattingAccelerator;
+    private int _selectionLengthBeforeFormattingAccelerator;
+    private static readonly string s_diagnosticLogPath = Path.Combine(Path.GetTempPath(), "LeXtudio.RichText.TextBox.log");
+
+    public static bool DiagnosticsEnabled { get; set; }
 
     public event TextChangedEventHandler? TextChanged;
 
     /// <summary>Raised when the selection changes inside the inner TextBox.</summary>
     public event RoutedEventHandler? SelectionChanged;
+
+    /// <summary>Raised for Ctrl+B/I/U before the inner platform text box can mutate the selection.</summary>
+    public event EventHandler<TextFormattingAcceleratorRequestedEventArgs>? FormattingAcceleratorRequested;
 
     /// <summary>Selection start (caret index). Mirrors Microsoft.UI.Xaml.Controls.TextBox.SelectionStart.</summary>
     public int SelectionStart
@@ -186,6 +198,9 @@ public sealed class TextBox : UserControl, IDisposable
         _textBox.LostFocus += OnTextBoxLostFocus;
         _textBox.SelectionChanged += OnTextBoxSelectionChanged;
         _textBox.KeyDown += OnTextBoxKeyDown;
+        AddFormattingKeyboardAccelerator(VirtualKey.B);
+        AddFormattingKeyboardAccelerator(VirtualKey.I);
+        AddFormattingKeyboardAccelerator(VirtualKey.U);
         _textBox.SizeChanged += (_, _) => SyncPlatformState();
 
         Loaded += OnLoaded;
@@ -294,6 +309,24 @@ public sealed class TextBox : UserControl, IDisposable
 
     private void OnTextBoxTextChanged(object sender, TextChangedEventArgs e)
     {
+        LogDiagnostic($"TextChanged text={DescribeText(_textBox.Text)} selection={_textBox.SelectionStart}+{_textBox.SelectionLength} applyingIme={_isApplyingImeText} composing={_isComposing}");
+
+        if (TrySuppressFormattingControlEdit())
+        {
+            return;
+        }
+
+        if (_isRestoringFormattingControlEdit)
+        {
+            if (Text != _textBox.Text)
+            {
+                SetValue(TextProperty, _textBox.Text);
+            }
+
+            SyncPlatformState();
+            return;
+        }
+
         if (Text != _textBox.Text)
         {
             SetValue(TextProperty, _textBox.Text);
@@ -310,33 +343,180 @@ public sealed class TextBox : UserControl, IDisposable
 
     private void OnTextBoxSelectionChanged(object sender, RoutedEventArgs e)
     {
+        LogDiagnostic($"SelectionChanged selection={_textBox.SelectionStart}+{_textBox.SelectionLength}");
         SyncPlatformState();
         SelectionChanged?.Invoke(this, e);
     }
 
     private void OnTextBoxKeyDown(object sender, KeyRoutedEventArgs e)
     {
+        bool ctrl = IsKeyDown(VirtualKey.Control) || IsKeyDown(VirtualKey.LeftControl) || IsKeyDown(VirtualKey.RightControl);
+        bool shift = InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift)
+            .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+
+        LogDiagnostic($"KeyDown key={e.Key} ctrl={ctrl} shift={shift} handledIn={e.Handled} selection={_textBox.SelectionStart}+{_textBox.SelectionLength}");
+
+        if (ctrl && TryHandleFormattingAccelerator(e.Key))
+        {
+            e.Handled = true;
+            LogDiagnostic($"KeyDown handled formatting key={e.Key}");
+            return;
+        }
+
         if (_context is null)
         {
             return;
         }
-
-        bool ctrl = InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control)
-            .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
-        bool shift = InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift)
-            .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
 
         try
         {
             if (_context.ProcessKeyEvent((int)e.Key, shift, ctrl))
             {
                 e.Handled = true;
+                LogDiagnostic($"KeyDown handled by CoreText key={e.Key}");
             }
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"TextBox ProcessKeyEvent failed: {ex}");
         }
+    }
+
+    private bool TryHandleFormattingAccelerator(VirtualKey key)
+    {
+        var accelerator = key switch
+        {
+            VirtualKey.B => TextFormattingAccelerator.Bold,
+            VirtualKey.I => TextFormattingAccelerator.Italic,
+            VirtualKey.U => TextFormattingAccelerator.Underline,
+            _ => TextFormattingAccelerator.None,
+        };
+
+        if (accelerator == TextFormattingAccelerator.None)
+        {
+            return false;
+        }
+
+        CaptureFormattingAcceleratorState();
+        var args = new TextFormattingAcceleratorRequestedEventArgs(accelerator);
+        LogDiagnostic($"FormattingAccelerator request={accelerator} subscribers={FormattingAcceleratorRequested is not null}");
+        FormattingAcceleratorRequested?.Invoke(this, args);
+        LogDiagnostic($"FormattingAccelerator handled={args.Handled}");
+        if (!args.Handled)
+        {
+            _suppressNextFormattingControlEdit = false;
+        }
+
+        return args.Handled;
+    }
+
+    private void CaptureFormattingAcceleratorState()
+    {
+        _textBeforeFormattingAccelerator = _textBox.Text ?? string.Empty;
+        _selectionStartBeforeFormattingAccelerator = _textBox.SelectionStart;
+        _selectionLengthBeforeFormattingAccelerator = _textBox.SelectionLength;
+        _suppressNextFormattingControlEdit = true;
+    }
+
+    private bool TrySuppressFormattingControlEdit()
+    {
+        if (!_suppressNextFormattingControlEdit)
+        {
+            return false;
+        }
+
+        string current = _textBox.Text ?? string.Empty;
+        bool isControlEdit = current.Length == 1 && current[0] is >= '\u0001' and <= '\u001f';
+        if (!isControlEdit)
+        {
+            _suppressNextFormattingControlEdit = false;
+            return false;
+        }
+
+        LogDiagnostic($"SuppressFormattingControlEdit current={DescribeText(current)} restore={DescribeText(_textBeforeFormattingAccelerator)} selection={_selectionStartBeforeFormattingAccelerator}+{_selectionLengthBeforeFormattingAccelerator}");
+        _suppressNextFormattingControlEdit = false;
+        _isApplyingImeText = true;
+        _isRestoringFormattingControlEdit = true;
+        try
+        {
+            _textBox.Text = _textBeforeFormattingAccelerator;
+            SelectRange(_selectionStartBeforeFormattingAccelerator, _selectionLengthBeforeFormattingAccelerator);
+            Text = _textBeforeFormattingAccelerator;
+        }
+        finally
+        {
+            _isRestoringFormattingControlEdit = false;
+            _isApplyingImeText = false;
+        }
+
+        SyncPlatformState();
+        return true;
+    }
+
+    private void AddFormattingKeyboardAccelerator(VirtualKey key)
+    {
+        AddFormattingKeyboardAccelerator(key, addToInnerTextBox: true);
+        AddFormattingKeyboardAccelerator(key, addToInnerTextBox: false);
+    }
+
+    private void AddFormattingKeyboardAccelerator(VirtualKey key, bool addToInnerTextBox)
+    {
+        var accelerator = new KeyboardAccelerator
+        {
+            Key = key,
+            Modifiers = VirtualKeyModifiers.Control,
+        };
+        accelerator.Invoked += OnFormattingKeyboardAcceleratorInvoked;
+
+        if (addToInnerTextBox)
+            _textBox.KeyboardAccelerators.Add(accelerator);
+        else
+            KeyboardAccelerators.Add(accelerator);
+    }
+
+    private void OnFormattingKeyboardAcceleratorInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        LogDiagnostic($"KeyboardAccelerator invoked key={sender.Key} handledIn={args.Handled} selection={_textBox.SelectionStart}+{_textBox.SelectionLength}");
+        if (TryHandleFormattingAccelerator(sender.Key))
+        {
+            args.Handled = true;
+            LogDiagnostic($"KeyboardAccelerator handled key={sender.Key}");
+        }
+    }
+
+    private static bool IsKeyDown(VirtualKey key)
+        => InputKeyboardSource.GetKeyStateForCurrentThread(key)
+            .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+
+    private static void LogDiagnostic(string message)
+    {
+        if (!DiagnosticsEnabled)
+        {
+            return;
+        }
+
+        try
+        {
+            File.AppendAllText(s_diagnosticLogPath, $"{DateTimeOffset.Now:O} {message}{Environment.NewLine}");
+        }
+        catch
+        {
+            // Diagnostics must never affect text input behavior.
+        }
+    }
+
+    private static string DescribeText(string? text)
+    {
+        if (text is null)
+            return "<null>";
+
+        return "\"" + text
+            .Replace("\\", "\\\\")
+            .Replace("\r", "\\r")
+            .Replace("\n", "\\n")
+            .Replace("\t", "\\t")
+            .Replace("\u0002", "\\u0002")
+            .Replace("\"", "\\\"") + "\"";
     }
 
     private bool EnsureContext()
@@ -402,6 +582,8 @@ public sealed class TextBox : UserControl, IDisposable
 
     private void OnTextUpdating(LeXtudio.UI.Text.Core.CoreTextEditContext sender, LeXtudio.UI.Text.Core.CoreTextTextUpdatingEventArgs args)
     {
+        LogDiagnostic($"TextUpdating range={args.Range.StartCaretPosition}..{args.Range.EndCaretPosition} text={DescribeText(args.Text)} newSelection={args.NewSelection.StartCaretPosition}..{args.NewSelection.EndCaretPosition} readOnly={_textBox.IsReadOnly}");
+
         if (_textBox.IsReadOnly)
         {
             return;
@@ -486,6 +668,8 @@ public sealed class TextBox : UserControl, IDisposable
 
     private void OnCommandReceived(object? sender, LeXtudio.UI.Text.Core.CoreTextCommandReceivedEventArgs args)
     {
+        LogDiagnostic($"CommandReceived command={args.Command} selection={_textBox.SelectionStart}+{_textBox.SelectionLength}");
+
         bool handled = args.Command switch
         {
             "deleteBackward:" => Backspace(),
@@ -493,12 +677,16 @@ public sealed class TextBox : UserControl, IDisposable
             "insertNewline:" => InsertText(Environment.NewLine),
             "insertTab:" => InsertText("\t"),
             "selectAll:" => SelectAllText(),
+            "toggleBoldface:" => TryHandleFormattingAccelerator(VirtualKey.B),
+            "toggleItalics:" => TryHandleFormattingAccelerator(VirtualKey.I),
+            "toggleUnderline:" => TryHandleFormattingAccelerator(VirtualKey.U),
             _ => false,
         };
 
         if (handled)
         {
             args.Handled = true;
+            LogDiagnostic($"CommandReceived handled command={args.Command}");
             SyncPlatformState();
         }
     }
@@ -508,6 +696,7 @@ public sealed class TextBox : UserControl, IDisposable
         string text = _textBox.Text ?? string.Empty;
         start = Math.Clamp(start, 0, text.Length);
         length = Math.Clamp(length, 0, text.Length - start);
+        LogDiagnostic($"ApplyTextReplacement start={start} length={length} replacement={DescribeText(replacement)} oldText={DescribeText(text)}");
 
         _isApplyingImeText = true;
         try
@@ -515,6 +704,7 @@ public sealed class TextBox : UserControl, IDisposable
             _textBox.Text = text.Remove(start, length).Insert(start, replacement);
             SelectRange(start + replacement.Length, 0);
             Text = _textBox.Text;
+            LogDiagnostic($"ApplyTextReplacement result={DescribeText(_textBox.Text)} selection={_textBox.SelectionStart}+{_textBox.SelectionLength}");
         }
         finally
         {
@@ -693,5 +883,19 @@ public sealed class TextBox : UserControl, IDisposable
             return Rect.Empty;
         }
     }
+}
+
+public enum TextFormattingAccelerator
+{
+    None,
+    Bold,
+    Italic,
+    Underline,
+}
+
+public sealed class TextFormattingAcceleratorRequestedEventArgs(TextFormattingAccelerator accelerator) : EventArgs
+{
+    public TextFormattingAccelerator Accelerator { get; } = accelerator;
+    public bool Handled { get; set; }
 }
 #endif
