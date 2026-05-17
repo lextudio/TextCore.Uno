@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -32,9 +33,11 @@ namespace LeXtudio.UI.Text.Core
                 Environment.GetEnvironmentVariable("UNOEDIT_DEBUG_IME"),
                 "1",
                 StringComparison.Ordinal);
+        private static readonly ConcurrentDictionary<nint, WndProcDelegate> s_wndProcKeepAlive = new();
 
         private nint _hwnd;
         private nint _originalWndProc;
+        private nint _wndProcPtr;
         private WndProcDelegate? _wndProcDelegate; // prevent GC
         private CoreTextEditContext? _context;
         private bool _disposed;
@@ -67,8 +70,9 @@ namespace LeXtudio.UI.Text.Core
             try
             {
                 _wndProcDelegate = WndProc;
-                nint newProc = Marshal.GetFunctionPointerForDelegate(_wndProcDelegate);
-                _originalWndProc = SetWindowLongPtrW(_hwnd, GWLP_WNDPROC, newProc);
+                _wndProcPtr = Marshal.GetFunctionPointerForDelegate(_wndProcDelegate);
+                s_wndProcKeepAlive[_wndProcPtr] = _wndProcDelegate;
+                _originalWndProc = SetWindowLongPtrW(_hwnd, GWLP_WNDPROC, _wndProcPtr);
 
                 if (_originalWndProc == nint.Zero)
                 {
@@ -140,6 +144,9 @@ namespace LeXtudio.UI.Text.Core
                 }
             }
 
+            // Do not remove the delegate from s_wndProcKeepAlive. Multiple editor controls
+            // can subclass the same HWND, and later adapters may still have this delegate
+            // pointer as their previous WndProc in the CallWindowProc chain.
             _wndProcDelegate = null;
             _context = null;
         }

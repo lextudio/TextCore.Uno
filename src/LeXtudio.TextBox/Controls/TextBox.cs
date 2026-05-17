@@ -68,6 +68,70 @@ public sealed class TextBox : UserControl, IDisposable
 
     public event TextChangedEventHandler? TextChanged;
 
+    /// <summary>Raised when the selection changes inside the inner TextBox.</summary>
+    public event RoutedEventHandler? SelectionChanged;
+
+    /// <summary>Selection start (caret index). Mirrors Microsoft.UI.Xaml.Controls.TextBox.SelectionStart.</summary>
+    public int SelectionStart
+    {
+        get => _textBox.SelectionStart;
+        set => _textBox.SelectionStart = value;
+    }
+
+    /// <summary>Selection length. Mirrors Microsoft.UI.Xaml.Controls.TextBox.SelectionLength.</summary>
+    public int SelectionLength
+    {
+        get => _textBox.SelectionLength;
+        set => _textBox.SelectionLength = value;
+    }
+
+    /// <summary>Returns or replaces the currently selected text.</summary>
+    public string SelectedText
+    {
+        get => _textBox.SelectedText ?? string.Empty;
+        set => _textBox.SelectedText = value ?? string.Empty;
+    }
+
+    /// <summary>Select a contiguous range. Same shape as Microsoft.UI.Xaml.Controls.TextBox.Select.</summary>
+    public void Select(int start, int length) => SelectRange(start, length);
+
+    /// <summary>
+    /// Replaces the current selection (or inserts at the caret when no selection is active)
+    /// with <paramref name="text"/>. Routes through the same path that IME composition uses
+    /// so the platform stays in sync.
+    /// </summary>
+    public void ReplaceSelection(string text)
+    {
+        if (text is null) text = string.Empty;
+        int start = _textBox.SelectionStart;
+        int length = _textBox.SelectionLength;
+        ApplyTextReplacement(start, length, text);
+        int newCaret = start + text.Length;
+        SelectRange(newCaret, 0);
+    }
+
+    /// <summary>
+    /// Wraps the current selection with <paramref name="prefix"/> and <paramref name="suffix"/>.
+    /// When no selection exists, inserts <c>prefix + suffix</c> at the caret and places the
+    /// caret between them — convenient for "**bold**" / "*italic*" / "__underline__" markdown-
+    /// style toolbar actions.
+    /// </summary>
+    public void WrapSelection(string prefix, string suffix)
+    {
+        prefix ??= string.Empty;
+        suffix ??= string.Empty;
+        int start = _textBox.SelectionStart;
+        int length = _textBox.SelectionLength;
+        string current = length > 0 ? (_textBox.Text ?? string.Empty).Substring(start, length) : string.Empty;
+        string replacement = prefix + current + suffix;
+        ApplyTextReplacement(start, length, replacement);
+        // Place the caret either after the wrapped selection or between the markers.
+        int caret = length > 0
+            ? start + replacement.Length
+            : start + prefix.Length;
+        SelectRange(caret, 0);
+    }
+
     public string Text
     {
         get => (string)GetValue(TextProperty);
@@ -247,6 +311,7 @@ public sealed class TextBox : UserControl, IDisposable
     private void OnTextBoxSelectionChanged(object sender, RoutedEventArgs e)
     {
         SyncPlatformState();
+        SelectionChanged?.Invoke(this, e);
     }
 
     private void OnTextBoxKeyDown(object sender, KeyRoutedEventArgs e)
