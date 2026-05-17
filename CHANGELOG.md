@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented in this file. This project follows the "Keep a Changelog" format.
 
+## [v0.2.10] - 2026-05-17
+
+- Added more text box properties.
+
 ## [v0.2.9] - 2026-05-17
 
 - Fixed accelerator support.
