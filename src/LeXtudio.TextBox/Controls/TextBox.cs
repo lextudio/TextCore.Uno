@@ -405,6 +405,12 @@ public sealed class TextBox : UserControl, IDisposable
     {
         LogDiagnostic($"SelectionChanged selection={_textBox.SelectionStart}+{_textBox.SelectionLength}");
         SyncPlatformState();
+        if (_suppressNextFormattingControlEdit || _isRestoringFormattingControlEdit)
+        {
+            LogDiagnostic($"SelectionChanged suppressedForFormattingControl pending={_suppressNextFormattingControlEdit} restoring={_isRestoringFormattingControlEdit}");
+            return;
+        }
+
         SelectionChanged?.Invoke(this, e);
     }
 
@@ -458,7 +464,10 @@ public sealed class TextBox : UserControl, IDisposable
         }
 
         CaptureFormattingAcceleratorState();
-        var args = new TextFormattingAcceleratorRequestedEventArgs(accelerator);
+        var args = new TextFormattingAcceleratorRequestedEventArgs(
+            accelerator,
+            _selectionStartBeforeFormattingAccelerator,
+            _selectionLengthBeforeFormattingAccelerator);
         LogDiagnostic($"FormattingAccelerator request={accelerator} subscribers={FormattingAcceleratorRequested is not null}");
         FormattingAcceleratorRequested?.Invoke(this, args);
         LogDiagnostic($"FormattingAccelerator handled={args.Handled}");
@@ -486,8 +495,12 @@ public sealed class TextBox : UserControl, IDisposable
         }
 
         string current = _textBox.Text ?? string.Empty;
-        bool isControlEdit = current.Length == 1 && current[0] is >= '\u0001' and <= '\u001f';
-        if (!isControlEdit)
+        bool isFormattingControlEdit = IsFormattingControlEdit(
+            current,
+            _textBeforeFormattingAccelerator,
+            _selectionStartBeforeFormattingAccelerator,
+            _selectionLengthBeforeFormattingAccelerator);
+        if (!isFormattingControlEdit)
         {
             _suppressNextFormattingControlEdit = false;
             return false;
@@ -512,6 +525,75 @@ public sealed class TextBox : UserControl, IDisposable
         SyncPlatformState();
         return true;
     }
+
+    private static bool IsFormattingControlEdit(string current, string previous, int selectionStart, int selectionLength)
+    {
+        return IsSingleFormattingControlCharacterInsertion(current, previous)
+            || IsSingleFormattingControlCharacterReplacement(current, previous, selectionStart, selectionLength);
+    }
+
+    private static bool IsSingleFormattingControlCharacterInsertion(string current, string previous)
+    {
+        if (current.Length != previous.Length + 1)
+        {
+            return false;
+        }
+
+        int currentIndex = 0;
+        int previousIndex = 0;
+        bool foundInsertedControlCharacter = false;
+
+        while (currentIndex < current.Length)
+        {
+            if (previousIndex < previous.Length && current[currentIndex] == previous[previousIndex])
+            {
+                currentIndex++;
+                previousIndex++;
+                continue;
+            }
+
+            if (foundInsertedControlCharacter || Array.IndexOf(s_formattingControlCharacters, current[currentIndex]) < 0)
+            {
+                return false;
+            }
+
+            foundInsertedControlCharacter = true;
+            currentIndex++;
+        }
+
+        return foundInsertedControlCharacter && previousIndex == previous.Length;
+    }
+
+    private static bool IsSingleFormattingControlCharacterReplacement(string current, string previous, int selectionStart, int selectionLength)
+    {
+        selectionStart = Math.Clamp(selectionStart, 0, previous.Length);
+        selectionLength = Math.Clamp(selectionLength, 0, previous.Length - selectionStart);
+        if (selectionLength <= 0 || current.Length != previous.Length - selectionLength + 1)
+        {
+            return false;
+        }
+
+        if (!current.AsSpan(0, selectionStart).SequenceEqual(previous.AsSpan(0, selectionStart)))
+        {
+            return false;
+        }
+
+        if (Array.IndexOf(s_formattingControlCharacters, current[selectionStart]) < 0)
+        {
+            return false;
+        }
+
+        var previousSuffixStart = selectionStart + selectionLength;
+        var currentSuffixStart = selectionStart + 1;
+        return current.AsSpan(currentSuffixStart).SequenceEqual(previous.AsSpan(previousSuffixStart));
+    }
+
+    private static readonly char[] s_formattingControlCharacters =
+    {
+        '\u0002', // Ctrl+B
+        '\u0009', // Ctrl+I can surface as a tab character on some platforms.
+        '\u0015', // Ctrl+U
+    };
 
     private void AddFormattingKeyboardAccelerator(VirtualKey key)
     {
@@ -953,9 +1035,11 @@ public enum TextFormattingAccelerator
     Underline,
 }
 
-public sealed class TextFormattingAcceleratorRequestedEventArgs(TextFormattingAccelerator accelerator) : EventArgs
+public sealed class TextFormattingAcceleratorRequestedEventArgs(TextFormattingAccelerator accelerator, int selectionStart, int selectionLength) : EventArgs
 {
     public TextFormattingAccelerator Accelerator { get; } = accelerator;
+    public int SelectionStart { get; } = selectionStart;
+    public int SelectionLength { get; } = selectionLength;
     public bool Handled { get; set; }
 }
 #endif
