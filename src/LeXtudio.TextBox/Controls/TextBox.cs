@@ -60,6 +60,27 @@ public sealed class TextBox : UserControl, IDisposable
             typeof(TextBox),
             new PropertyMetadata(null, OnPlaceholderForegroundPropertyChanged));
 
+    public static readonly DependencyProperty IsReadOnlyProperty =
+        DependencyProperty.Register(
+            nameof(IsReadOnly),
+            typeof(bool),
+            typeof(TextBox),
+            new PropertyMetadata(false, OnIsReadOnlyPropertyChanged));
+
+    public static readonly DependencyProperty InputScopeProperty =
+        DependencyProperty.Register(
+            nameof(InputScope),
+            typeof(InputScope),
+            typeof(TextBox),
+            new PropertyMetadata(null, OnInputScopePropertyChanged));
+
+    public static readonly DependencyProperty TextAlignmentProperty =
+        DependencyProperty.Register(
+            nameof(TextAlignment),
+            typeof(TextAlignment),
+            typeof(TextBox),
+            new PropertyMetadata(TextAlignment.Left, OnTextAlignmentPropertyChanged));
+
     private readonly Microsoft.UI.Xaml.Controls.TextBox _textBox;
     private LeXtudio.UI.Text.Core.CoreTextEditContext? _context;
     private bool _isApplyingImeText;
@@ -180,6 +201,24 @@ public sealed class TextBox : UserControl, IDisposable
         set => SetValue(PlaceholderForegroundProperty, value);
     }
 
+    public bool IsReadOnly
+    {
+        get => (bool)GetValue(IsReadOnlyProperty);
+        set => SetValue(IsReadOnlyProperty, value);
+    }
+
+    public InputScope? InputScope
+    {
+        get => (InputScope?)GetValue(InputScopeProperty);
+        set => SetValue(InputScopeProperty, value);
+    }
+
+    public TextAlignment TextAlignment
+    {
+        get => (TextAlignment)GetValue(TextAlignmentProperty);
+        set => SetValue(TextAlignmentProperty, value);
+    }
+
     public TextBox()
     {
         _textBox = new Microsoft.UI.Xaml.Controls.TextBox
@@ -190,6 +229,9 @@ public sealed class TextBox : UserControl, IDisposable
             Header = Header,
             AcceptsReturn = AcceptsReturn,
             TextWrapping = TextWrapping,
+            IsReadOnly = IsReadOnly,
+            InputScope = InputScope,
+            TextAlignment = TextAlignment,
             Padding = Padding,
         };
 
@@ -256,6 +298,24 @@ public sealed class TextBox : UserControl, IDisposable
     {
         var control = (TextBox)d;
         control._textBox.TextWrapping = (TextWrapping)e.NewValue;
+    }
+
+    private static void OnIsReadOnlyPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        var control = (TextBox)d;
+        control._textBox.IsReadOnly = (bool)e.NewValue;
+    }
+
+    private static void OnInputScopePropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        var control = (TextBox)d;
+        control._textBox.InputScope = (InputScope?)e.NewValue;
+    }
+
+    private static void OnTextAlignmentPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        var control = (TextBox)d;
+        control._textBox.TextAlignment = (TextAlignment)e.NewValue;
     }
 
     private static void OnPlaceholderForegroundPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
