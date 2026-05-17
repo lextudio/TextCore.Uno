@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file. This project follows the "Keep a Changelog" format.
 
+## [v0.2.9] - 2026-05-17
+
+- Fixed accelerator support.
+- Added selection support.
+- Fixed a native crash.
+
 ## [v0.2.8] - 2026-05-13
 
 - Moved text box control out.
