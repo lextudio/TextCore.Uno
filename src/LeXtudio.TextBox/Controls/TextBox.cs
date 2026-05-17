@@ -82,6 +82,12 @@ public sealed class TextBox : UserControl, IDisposable
             new PropertyMetadata(TextAlignment.Left, OnTextAlignmentPropertyChanged));
 
     private readonly Microsoft.UI.Xaml.Controls.TextBox _textBox;
+
+    /// <summary>The inner platform TextBox. Exposed so hosts can configure
+    /// surface-level state (e.g. <see cref="FrameworkElement.ContextFlyout"/>)
+    /// that the platform consults directly instead of bubbling up to this
+    /// shim.</summary>
+    public Microsoft.UI.Xaml.Controls.TextBox InnerTextBox => _textBox;
     private LeXtudio.UI.Text.Core.CoreTextEditContext? _context;
     private bool _isApplyingImeText;
     private bool _isComposing;
