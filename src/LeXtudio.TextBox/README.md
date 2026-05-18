@@ -32,7 +32,7 @@ dotnet add package LeXtudio.TextBox
 Or add a `PackageReference` to your project file:
 
 ```xml
-<PackageReference Include="LeXtudio.TextBox" Version="0.2.10" />
+<PackageReference Include="LeXtudio.TextBox" Version="0.2.11" />
 ```
 
 ## Usage
