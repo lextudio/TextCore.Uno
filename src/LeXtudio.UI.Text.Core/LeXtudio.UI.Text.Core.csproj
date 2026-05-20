@@ -1,6 +1,6 @@
 <Project Sdk="Uno.Sdk">
   <PropertyGroup>
-    <TargetFramework>net9.0-desktop</TargetFramework>
+    <TargetFrameworks>net10.0-desktop</TargetFrameworks>
     <RootNamespace>LeXtudio.UI.Text.Core</RootNamespace>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>

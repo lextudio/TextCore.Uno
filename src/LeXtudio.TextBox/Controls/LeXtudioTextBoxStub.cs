@@ -1,25 +1,11 @@
 #if WINDOWS_APP_SDK
-using Microsoft.UI.Xaml;
+using System.Runtime.CompilerServices;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media;
 
-// Stub that satisfies the LeXtudio.UI.Controls.TextBox API surface used by SearchPanel.xaml
-// on the WinUI target, where the real CoreText-bridged implementation is unavailable.
-namespace LeXtudio.UI.Controls;
+[assembly: TypeForwardedTo(typeof(global::Microsoft.UI.Xaml.Controls.TextBox))]
 
-public class TextBox : Microsoft.UI.Xaml.Controls.TextBox
+namespace LeXtudio.UI.Controls
 {
-    public static readonly DependencyProperty PlaceholderForegroundProperty =
-        DependencyProperty.Register(
-            nameof(PlaceholderForeground),
-            typeof(Brush),
-            typeof(TextBox),
-            new PropertyMetadata(null));
-
-    public Brush? PlaceholderForeground
-    {
-        get => (Brush?)GetValue(PlaceholderForegroundProperty);
-        set => SetValue(PlaceholderForegroundProperty, value);
-    }
+    // Forward the LeXtudio.UI.Controls.TextBox type to the WinUI implementation.
 }
 #endif
