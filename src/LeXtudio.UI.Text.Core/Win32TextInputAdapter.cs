@@ -93,7 +93,10 @@ namespace LeXtudio.UI.Text.Core
             _caretY = y;
             _caretWidth = width;
             _caretHeight = height;
-            PositionImeWindow();
+            if (OwnsInput())
+            {
+                PositionImeWindow();
+            }
         }
 
         /// <inheritdoc />
@@ -153,6 +156,11 @@ namespace LeXtudio.UI.Text.Core
             switch (msg)
             {
                 case WM_IME_STARTCOMPOSITION:
+                    if (!OwnsInput())
+                    {
+                        return CallWindowProcW(_originalWndProc, hwnd, msg, wParam, lParam);
+                    }
+
                     Log("WM_IME_STARTCOMPOSITION");
                     _compositionStart = _selectionStart;
                     _compositionLength = Math.Max(0, _selectionEnd - _selectionStart);
@@ -161,10 +169,20 @@ namespace LeXtudio.UI.Text.Core
                     return nint.Zero;
 
                 case WM_IME_COMPOSITION:
+                    if (!OwnsInput())
+                    {
+                        return CallWindowProcW(_originalWndProc, hwnd, msg, wParam, lParam);
+                    }
+
                     HandleImeComposition(lParam);
                     return nint.Zero;
 
                 case WM_IME_ENDCOMPOSITION:
+                    if (!OwnsInput())
+                    {
+                        return CallWindowProcW(_originalWndProc, hwnd, msg, wParam, lParam);
+                    }
+
                     Log("WM_IME_ENDCOMPOSITION");
                     _isComposing = false;
                     _compositionLength = 0;
@@ -173,6 +191,11 @@ namespace LeXtudio.UI.Text.Core
             }
 
             return CallWindowProcW(_originalWndProc, hwnd, msg, wParam, lParam);
+        }
+
+        private bool OwnsInput()
+        {
+            return _context?.IsInputActiveNow() == true;
         }
 
         private void HandleImeComposition(nint lParam)

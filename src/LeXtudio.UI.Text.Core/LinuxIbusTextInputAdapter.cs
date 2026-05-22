@@ -63,7 +63,7 @@ namespace LeXtudio.UI.Text.Core
         /// <inheritdoc />
         public void NotifyCaretRectChanged(double x, double y, double width, double height, double scale)
         {
-            if (_ibus == null)
+            if (_ibus == null || !OwnsInput())
             {
                 return;
             }
@@ -107,7 +107,7 @@ namespace LeXtudio.UI.Text.Core
         /// </summary>
         public void NotifyLayoutChanged()
         {
-            if (_ibus == null || _lastCaretScale == 0)
+            if (_ibus == null || _lastCaretScale == 0 || !OwnsInput())
             {
                 return;
             }
@@ -155,7 +155,13 @@ namespace LeXtudio.UI.Text.Core
         }
 
         /// <inheritdoc />
-        public void NotifyFocusEnter() => _ibus?.FocusIn();
+        public void NotifyFocusEnter()
+        {
+            if (OwnsInput())
+            {
+                _ibus?.FocusIn();
+            }
+        }
 
         /// <inheritdoc />
         public void NotifyFocusLeave() => _ibus?.FocusOut();
@@ -163,7 +169,7 @@ namespace LeXtudio.UI.Text.Core
         /// <inheritdoc />
         public bool ProcessKeyEvent(int virtualKey, bool shiftPressed, bool controlPressed, char? unicodeKey = null)
         {
-            if (_ibus == null || !_ibus.IsConnected)
+            if (_ibus == null || !_ibus.IsConnected || !OwnsInput())
             {
                 return false;
             }
@@ -284,6 +290,11 @@ namespace LeXtudio.UI.Text.Core
                 _compositionLength = 0;
                 _context?.RaiseCompositionCompleted();
             }
+        }
+
+        private bool OwnsInput()
+        {
+            return _context?.IsInputActiveNow() == true;
         }
 
         /// <inheritdoc />
