@@ -28,11 +28,6 @@ namespace LeXtudio.UI.Text.Core
         private const int CFS_FORCE_POSITION = 0x0020;
         private const int CFS_CANDIDATEPOS = 0x0040;
 
-        private static readonly bool s_debugEnabled =
-            string.Equals(
-                Environment.GetEnvironmentVariable("UNOEDIT_DEBUG_IME"),
-                "1",
-                StringComparison.Ordinal);
         private static readonly ConcurrentDictionary<nint, WndProcDelegate> s_wndProcKeepAlive = new();
 
         private nint _hwnd;
@@ -319,19 +314,9 @@ namespace LeXtudio.UI.Text.Core
 
         private static void Log(string message)
         {
-            if (!s_debugEnabled)
-            {
-                return;
-            }
-
             try
             {
-                string path = System.IO.Path.Combine(
-                    System.IO.Path.GetTempPath(),
-                    "unoedit_ime.log");
-                System.IO.File.AppendAllText(
-                    path,
-                    $"{DateTime.Now:HH:mm:ss.fff} [Win32Adapter] {message}{Environment.NewLine}");
+                ImeLogging.AppendLine($"{DateTime.Now:HH:mm:ss.fff} [Win32Adapter] {message}");
             }
             catch
             {

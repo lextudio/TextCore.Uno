@@ -22,15 +22,6 @@
     <UnoUIDisableLongPathWarning>false</UnoUIDisableLongPathWarning>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(OS)' == 'Unix' and Exists('/System/Library/Frameworks/AppKit.framework')">
-    <TextCoreMacInputSource>$(MSBuildProjectDirectory)/Native/MacOS/UnoEditMacInput.mm</TextCoreMacInputSource>
-    <TextCoreMacInputOutput>$(MSBuildProjectDirectory)/bin/$(Configuration)/$(TargetFramework)/libUnoEditMacInput.dylib</TextCoreMacInputOutput>
-    <GetCopyToOutputDirectoryItemsDependsOn>$(GetCopyToOutputDirectoryItemsDependsOn);AddTextCoreMacBridgeToCopyItems</GetCopyToOutputDirectoryItemsDependsOn>
-  </PropertyGroup>
-
-  <PropertyGroup>
-    <MacImeDylibPath Condition="Exists('$(TextCoreMacInputOutput)')">$(TextCoreMacInputOutput)</MacImeDylibPath>
-  </PropertyGroup>
 
   <ItemGroup>
     <!-- Use repository README -->
@@ -42,47 +33,8 @@
     <None Include="buildTransitive/LeXtudio.UI.Text.Core.targets" Pack="true" PackagePath="buildTransitive/LeXtudio.UI.Text.Core.targets" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(MacImeDylibPath)' != ''">
-    <None Include="$(MacImeDylibPath)" Pack="true" PackagePath="runtimes/osx/native/libUnoEditMacInput.dylib" />
-    <None Include="$(MacImeDylibPath)" Pack="true" PackagePath="runtimes/osx-x64/native/libUnoEditMacInput.dylib" />
-    <None Include="$(MacImeDylibPath)" Pack="true" PackagePath="runtimes/osx-arm64/native/libUnoEditMacInput.dylib" />
-  </ItemGroup>
-
   <ItemGroup>
     <PackageReference Include="GitVersion.MsBuild" PrivateAssets="All" />
   </ItemGroup>
 
-  <Target Name="EnsureMacNativeBridgeForPack" BeforeTargets="Pack" DependsOnTargets="BuildTextCoreMacInputBridge">
-    <Message Importance="high" Text="[LeXtudio.UI.Text.Core] macOS native bridge path: $(MacImeDylibPath)" Condition="'$(MacImeDylibPath)' != ''" />
-    <Error
-      Condition="'$(OS)' == 'Unix' and Exists('/System/Library/Frameworks/AppKit.framework') and '$(MacImeDylibPath)' == ''"
-      Text="macOS packaging requires libUnoEditMacInput.dylib. Build the native bridge first (for example run: dotnet build -c Release /t:Build,BuildTextCoreMacInputBridge in the LeXtudio.UI.Text.Core project) so the dylib is produced." />
-  </Target>
-
-  <Target Name="BuildTextCoreMacInputBridge"
-          AfterTargets="Build"
-          Condition="'$(OS)' == 'Unix' and Exists('/System/Library/Frameworks/AppKit.framework') and Exists('$(TextCoreMacInputSource)')">
-    <Message Importance="high" Text="[LeXtudio.UI.Text.Core] Building native macOS IME bridge: $(TextCoreMacInputOutput)" />
-    <Exec Command="xcrun clang++ -dynamiclib -fobjc-arc -framework AppKit -framework Foundation -o &quot;$(TextCoreMacInputOutput)&quot; &quot;$(TextCoreMacInputSource)&quot;" />
-  </Target>
-
-  <Target Name="AddTextCoreMacBridgeToCopyItems"
-          DependsOnTargets="BuildTextCoreMacInputBridge"
-          Condition="'$(OS)' == 'Unix' and Exists('/System/Library/Frameworks/AppKit.framework') and Exists('$(TextCoreMacInputOutput)')">
-    <ItemGroup>
-      <!-- Copy native dylib to direct output and runtime-specific directories for NuGet consumers -->
-      <ContentWithTargetPath Include="$(TextCoreMacInputOutput)">
-        <TargetPath>libUnoEditMacInput.dylib</TargetPath>
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      </ContentWithTargetPath>
-      <ContentWithTargetPath Include="$(TextCoreMacInputOutput)">
-        <TargetPath>runtimes/osx-arm64/native/libUnoEditMacInput.dylib</TargetPath>
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      </ContentWithTargetPath>
-      <ContentWithTargetPath Include="$(TextCoreMacInputOutput)">
-        <TargetPath>runtimes/osx-x64/native/libUnoEditMacInput.dylib</TargetPath>
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      </ContentWithTargetPath>
-    </ItemGroup>
-  </Target>
 </Project>

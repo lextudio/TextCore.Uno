@@ -31,6 +31,13 @@ namespace LeXtudio.UI.Text.Core
         /// </summary>
         public double RasterizationScale { get; set; } = 1.0;
 
+        /// <summary>
+        /// Optional predicate used by platform adapters to verify that this
+        /// context still owns the native text input session before consuming
+        /// global IME callbacks.
+        /// </summary>
+        public Func<bool>? IsInputActive { get; set; }
+
         /// <summary>Initializes a context with no platform adapter (useful for testing).</summary>
         public CoreTextEditContext()
         {
@@ -177,6 +184,23 @@ namespace LeXtudio.UI.Text.Core
 
         /// <summary>Raise the <see cref="CommandReceived"/> event.</summary>
         public void RaiseCommandReceived(CoreTextCommandReceivedEventArgs e) => CommandReceived?.Invoke(this, e);
+
+        internal bool IsInputActiveNow()
+        {
+            if (IsInputActive is null)
+            {
+                return true;
+            }
+
+            try
+            {
+                return IsInputActive();
+            }
+            catch
+            {
+                return false;
+            }
+        }
 
         private static nint TryGetNativeWindowHandle(Window? window)
         {

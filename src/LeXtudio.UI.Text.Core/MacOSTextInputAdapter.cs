@@ -1,28 +1,34 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
-using System.Threading;
 
 namespace LeXtudio.UI.Text.Core
 {
     /// <summary>
-    /// macOS text input adapter that bridges AppKit IME callbacks through
-    /// libUnoEditMacInput.dylib when available.
+    /// macOS text input adapter that binds directly to Uno's IME callbacks
+    /// in libUnoNativeMac.dylib.
     /// </summary>
     internal sealed class MacOSTextInputAdapter : IPlatformTextInputAdapter
     {
-        private static readonly bool s_debug =
-            string.Equals(Environment.GetEnvironmentVariable("UNOEDIT_DEBUG_IME"), "1", StringComparison.Ordinal);
+        private static readonly object s_gate = new();
+        private static readonly Dictionary<nint, MacOSTextInputAdapter> s_adaptersByWindow = new();
+        private static MacOSTextInputAdapter? s_activeAdapter;
+        private static bool s_callbacksRegistered;
 
-        private static long s_nextEventId;
+        // Keep delegates rooted so Marshal.GetFunctionPointerForDelegate remains valid.
+        private static readonly ImeInsertTextDelegate s_insertTextDelegate = OnImeInsertText;
+        private static readonly ImeSetMarkedTextDelegate s_setMarkedTextDelegate = OnImeSetMarkedText;
+        private static readonly ImeUnmarkTextDelegate s_unmarkTextDelegate = OnImeUnmarkText;
+        private static readonly ImeGetCaretRectDelegate s_getCaretRectDelegate = OnImeGetCaretRect;
 
-        private readonly InsertTextDelegate _insertTextDelegate;
-        private readonly SetMarkedTextDelegate _setMarkedTextDelegate;
-        private readonly UnmarkTextDelegate _unmarkTextDelegate;
-        private readonly CommandDelegate _commandDelegate;
+        private static ImeInsertTextDelegate? s_prevInsertTextCallback;
+        private static ImeSetMarkedTextDelegate? s_prevSetMarkedTextCallback;
+        private static ImeUnmarkTextDelegate? s_prevUnmarkTextCallback;
+        private static ImeGetCaretRectDelegate? s_prevGetCaretRectCallback;
+        private static bool s_prevCallbacksLoaded;
 
         private CoreTextEditContext? _context;
-        private GCHandle _selfHandle;
-        private nint _bridgeHandle;
+        private nint _windowHandle;
         private bool _disposed;
         private double _lastCaretX;
         private double _lastCaretY;
@@ -34,14 +40,6 @@ namespace LeXtudio.UI.Text.Core
         private int _compositionStart;
         private int _compositionLength;
 
-        public MacOSTextInputAdapter()
-        {
-            _insertTextDelegate = OnInsertText;
-            _setMarkedTextDelegate = OnSetMarkedText;
-            _unmarkTextDelegate = OnUnmarkText;
-            _commandDelegate = OnCommand;
-        }
-
         /// <inheritdoc />
         public bool Attach(nint windowHandle, nint displayHandle, CoreTextEditContext context)
         {
@@ -52,32 +50,23 @@ namespace LeXtudio.UI.Text.Core
             }
 
             _context = context;
-            _selfHandle = GCHandle.Alloc(this);
+            _windowHandle = windowHandle;
 
             try
             {
-                nint managedContext = GCHandle.ToIntPtr(_selfHandle);
-                _bridgeHandle = NativeMethods.unoedit_ime_create(
-                    windowHandle,
-                    managedContext,
-                    Marshal.GetFunctionPointerForDelegate(_insertTextDelegate),
-                    Marshal.GetFunctionPointerForDelegate(_setMarkedTextDelegate),
-                    Marshal.GetFunctionPointerForDelegate(_unmarkTextDelegate),
-                    Marshal.GetFunctionPointerForDelegate(_commandDelegate));
+                EnsureCallbacksRegistered();
 
-                if (_bridgeHandle == nint.Zero)
+                lock (s_gate)
                 {
-                    Log("Attach failed: unoedit_ime_create returned null.");
-                    _selfHandle.Free();
-                    return false;
+                    s_adaptersByWindow[_windowHandle] = this;
                 }
 
-                Log($"Attach succeeded: bridge=0x{_bridgeHandle:X}");
+                Log($"Attach succeeded: window=0x{_windowHandle:X}");
                 return true;
             }
             catch (DllNotFoundException)
             {
-                Log("Attach failed: libUnoEditMacInput.dylib was not found.");
+                Log("Attach failed: libUnoNativeMac.dylib was not found.");
             }
             catch (EntryPointNotFoundException ex)
             {
@@ -88,18 +77,13 @@ namespace LeXtudio.UI.Text.Core
                 Log($"Attach failed: {ex.Message}");
             }
 
-            if (_selfHandle.IsAllocated)
-            {
-                _selfHandle.Free();
-            }
-
             return false;
         }
 
         /// <inheritdoc />
         public void NotifyCaretRectChanged(double x, double y, double width, double height, double scale)
         {
-            if (_bridgeHandle == nint.Zero)
+            if (_windowHandle == nint.Zero)
             {
                 return;
             }
@@ -111,9 +95,6 @@ namespace LeXtudio.UI.Text.Core
                 _lastCaretY = y;
                 _lastCaretW = width;
                 _lastCaretH = height;
-
-                ulong eventId = (ulong)Interlocked.Increment(ref s_nextEventId);
-                NativeMethods.unoedit_ime_update_caret_rect(_bridgeHandle, eventId, x, y, width, height);
             }
             catch (Exception ex)
             {
@@ -127,20 +108,8 @@ namespace LeXtudio.UI.Text.Core
         /// </summary>
         public void NotifyLayoutChanged()
         {
-            if (_bridgeHandle == nint.Zero)
-            {
-                return;
-            }
-
-            try
-            {
-                ulong eventId = (ulong)Interlocked.Increment(ref s_nextEventId);
-                NativeMethods.unoedit_ime_update_caret_rect(_bridgeHandle, eventId, _lastCaretX, _lastCaretY, _lastCaretW, _lastCaretH);
-            }
-            catch (Exception ex)
-            {
-                Log($"NotifyLayoutChanged failed: {ex.Message}");
-            }
+            // Uno native IME will request the latest caret rect via callback.
+            // Nothing to push here.
         }
 
         /// <summary>
@@ -163,14 +132,20 @@ namespace LeXtudio.UI.Text.Core
         /// <inheritdoc />
         public void NotifyFocusEnter()
         {
-            if (_bridgeHandle == nint.Zero)
+            if (_windowHandle == nint.Zero)
             {
                 return;
             }
 
             try
             {
-                NativeMethods.unoedit_ime_focus(_bridgeHandle, true);
+                lock (s_gate)
+                {
+                    s_activeAdapter = this;
+                }
+
+                Log($"NotifyFocusEnter: window=0x{_windowHandle:X}");
+                NativeMethods.uno_set_ime_active(_windowHandle, true);
             }
             catch (Exception ex)
             {
@@ -181,14 +156,22 @@ namespace LeXtudio.UI.Text.Core
         /// <inheritdoc />
         public void NotifyFocusLeave()
         {
-            if (_bridgeHandle == nint.Zero)
+            if (_windowHandle == nint.Zero)
             {
                 return;
             }
 
             try
             {
-                NativeMethods.unoedit_ime_focus(_bridgeHandle, false);
+                Log($"NotifyFocusLeave: window=0x{_windowHandle:X}");
+
+                lock (s_gate)
+                {
+                    if (ReferenceEquals(s_activeAdapter, this))
+                    {
+                        s_activeAdapter = null;
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -206,37 +189,130 @@ namespace LeXtudio.UI.Text.Core
 
             _disposed = true;
 
-            if (_bridgeHandle != nint.Zero)
+            if (_windowHandle != nint.Zero)
             {
-                try
+                lock (s_gate)
                 {
-                    NativeMethods.unoedit_ime_destroy(_bridgeHandle);
-                }
-                catch (Exception ex)
-                {
-                    Log($"Dispose failed: {ex.Message}");
+                    s_adaptersByWindow.Remove(_windowHandle);
+                    if (ReferenceEquals(s_activeAdapter, this))
+                    {
+                        s_activeAdapter = null;
+                    }
                 }
 
-                _bridgeHandle = nint.Zero;
-            }
-
-            if (_selfHandle.IsAllocated)
-            {
-                _selfHandle.Free();
+                _windowHandle = nint.Zero;
             }
 
             _context = null;
         }
 
-        private static void OnInsertText(nint context, nint utf8Text)
+        private static void EnsureCallbacksRegistered()
         {
-            if (GCHandle.FromIntPtr(context).Target is not MacOSTextInputAdapter adapter)
+            lock (s_gate)
+            {
+                if (s_callbacksRegistered)
+                {
+                    return;
+                }
+
+                LoadPreviousImeCallbacks();
+
+                NativeMethods.uno_set_ime_callbacks(
+                    Marshal.GetFunctionPointerForDelegate(s_insertTextDelegate),
+                    Marshal.GetFunctionPointerForDelegate(s_setMarkedTextDelegate),
+                    Marshal.GetFunctionPointerForDelegate(s_unmarkTextDelegate),
+                    Marshal.GetFunctionPointerForDelegate(s_getCaretRectDelegate));
+
+                s_callbacksRegistered = true;
+                Log("Registered Uno native IME callbacks.");
+            }
+        }
+
+        private static MacOSTextInputAdapter? ResolveActiveAdapter(nint windowHandle)
+        {
+            lock (s_gate)
+            {
+                if (s_activeAdapter is not null
+                    && (windowHandle == nint.Zero || s_activeAdapter._windowHandle == windowHandle))
+                {
+                    if (s_activeAdapter._context?.IsInputActiveNow() == true)
+                    {
+                        return s_activeAdapter;
+                    }
+
+                    Log($"ResolveActiveAdapter: active adapter rejected ownership for window=0x{windowHandle:X}");
+                    return null;
+                }
+
+                Log($"ResolveActiveAdapter: no active adapter for window=0x{windowHandle:X}");
+                return null;
+            }
+        }
+
+        private static void LoadPreviousImeCallbacks()
+        {
+            if (s_prevCallbacksLoaded)
             {
                 return;
             }
 
-            string? text = Marshal.PtrToStringUTF8(utf8Text);
-            if (string.IsNullOrEmpty(text) || adapter._context == null)
+            try
+            {
+                IntPtr insertPtr = NativeMethods.uno_get_ime_insert_text_callback();
+                IntPtr setMarkedPtr = NativeMethods.uno_get_ime_set_marked_text_callback();
+                IntPtr unmarkPtr = NativeMethods.uno_get_ime_unmark_text_callback();
+                IntPtr getCaretPtr = NativeMethods.uno_get_ime_get_caret_rect_callback();
+
+                if (insertPtr != IntPtr.Zero)
+                {
+                    s_prevInsertTextCallback = Marshal.GetDelegateForFunctionPointer<ImeInsertTextDelegate>(insertPtr);
+                }
+
+                if (setMarkedPtr != IntPtr.Zero)
+                {
+                    s_prevSetMarkedTextCallback = Marshal.GetDelegateForFunctionPointer<ImeSetMarkedTextDelegate>(setMarkedPtr);
+                }
+
+                if (unmarkPtr != IntPtr.Zero)
+                {
+                    s_prevUnmarkTextCallback = Marshal.GetDelegateForFunctionPointer<ImeUnmarkTextDelegate>(unmarkPtr);
+                }
+
+                if (getCaretPtr != IntPtr.Zero)
+                {
+                    s_prevGetCaretRectCallback = Marshal.GetDelegateForFunctionPointer<ImeGetCaretRectDelegate>(getCaretPtr);
+                }
+            }
+            catch (EntryPointNotFoundException)
+            {
+                // If the runtime does not expose getters, no previous callbacks are preserved.
+            }
+            catch (Exception ex)
+            {
+                Log($"LoadPreviousImeCallbacks failed: {ex.Message}");
+            }
+            finally
+            {
+                s_prevCallbacksLoaded = true;
+            }
+        }
+
+        private static void OnImeInsertText(nint windowHandle, nint textPtr, int length)
+        {
+            Log($"OnImeInsertText: window=0x{windowHandle:X}, length={length}");
+            var adapter = ResolveActiveAdapter(windowHandle);
+            if (adapter is null)
+            {
+                if (s_prevInsertTextCallback is not null)
+                {
+                    Log($"OnImeInsertText: forwarding to Uno callback for window=0x{windowHandle:X}");
+                    s_prevInsertTextCallback(windowHandle, textPtr, length);
+                }
+                return;
+            }
+
+            string? text = length > 0 ? Marshal.PtrToStringUni(textPtr, length) : null;
+            if (string.IsNullOrEmpty(text) || adapter._context is null)
             {
                 return;
             }
@@ -265,22 +341,28 @@ namespace LeXtudio.UI.Text.Core
             adapter._context.RaiseCompositionCompleted();
         }
 
-        private static void OnSetMarkedText(
-            nint context,
-            nint utf8Text,
+        private static void OnImeSetMarkedText(
+            nint windowHandle,
+            nint textPtr,
+            int length,
             int selectedStart,
-            int selectedLength,
-            int replacementStart,
-            int replacementLength)
+            int selectedLength)
         {
-            if (GCHandle.FromIntPtr(context).Target is not MacOSTextInputAdapter adapter || adapter._context == null)
+            Log($"OnImeSetMarkedText: window=0x{windowHandle:X}, length={length}, selectedStart={selectedStart}, selectedLength={selectedLength}");
+            var adapter = ResolveActiveAdapter(windowHandle);
+            if (adapter is null || adapter._context is null)
             {
+                if (s_prevSetMarkedTextCallback is not null)
+                {
+                    Log($"OnImeSetMarkedText: forwarding to Uno callback for window=0x{windowHandle:X}");
+                    s_prevSetMarkedTextCallback(windowHandle, textPtr, length, selectedStart, selectedLength);
+                }
                 return;
             }
 
             adapter.SyncSelectionFromContext();
 
-            string text = Marshal.PtrToStringUTF8(utf8Text) ?? string.Empty;
+            string text = length > 0 ? Marshal.PtrToStringUni(textPtr, length) ?? string.Empty : string.Empty;
             if (string.IsNullOrEmpty(text))
             {
                 if (adapter._isComposing)
@@ -301,7 +383,6 @@ namespace LeXtudio.UI.Text.Core
                 return;
             }
 
-            bool replacementSpecified = replacementStart >= 0 && replacementLength >= 0;
             if (adapter._isComposing)
             {
                 int compositionEnd = adapter._compositionStart + adapter._compositionLength;
@@ -323,11 +404,6 @@ namespace LeXtudio.UI.Text.Core
             {
                 int start = Math.Min(adapter._selectionStart, adapter._selectionEnd);
                 int end = Math.Max(adapter._selectionStart, adapter._selectionEnd);
-                if (replacementSpecified)
-                {
-                    start = replacementStart;
-                    end = replacementStart + replacementLength;
-                }
 
                 adapter._compositionStart = start;
                 adapter._compositionLength = Math.Max(0, end - start);
@@ -376,10 +452,17 @@ namespace LeXtudio.UI.Text.Core
             }
         }
 
-        private static void OnUnmarkText(nint context)
+        private static void OnImeUnmarkText(nint windowHandle)
         {
-            if (GCHandle.FromIntPtr(context).Target is not MacOSTextInputAdapter adapter || adapter._context == null)
+            Log($"OnImeUnmarkText: window=0x{windowHandle:X}");
+            var adapter = ResolveActiveAdapter(windowHandle);
+            if (adapter is null || adapter._context is null)
             {
+                if (s_prevUnmarkTextCallback is not null)
+                {
+                    Log($"OnImeUnmarkText: forwarding to Uno callback for window=0x{windowHandle:X}");
+                    s_prevUnmarkTextCallback(windowHandle);
+                }
                 return;
             }
 
@@ -393,45 +476,35 @@ namespace LeXtudio.UI.Text.Core
             adapter._context.RaiseCompositionCompleted();
         }
 
-        private static void OnCommand(nint context, nint utf8Command)
+        private static void OnImeGetCaretRect(nint windowHandle, out double x, out double y, out double width, out double height)
         {
-            if (GCHandle.FromIntPtr(context).Target is not MacOSTextInputAdapter adapter)
+            var adapter = ResolveActiveAdapter(windowHandle);
+            if (adapter is null)
             {
-                return;
-            }
-
-            string? command = Marshal.PtrToStringUTF8(utf8Command);
-            if (string.IsNullOrEmpty(command) || adapter._context == null)
-            {
-                return;
-            }
-
-            // Forward the command to the consumer via CommandReceived.
-            var args = new CoreTextCommandReceivedEventArgs(command);
-            adapter._context.RaiseCommandReceived(args);
-
-            // If the consumer didn't handle it, apply default composition logic.
-            if (!args.Handled)
-            {
-                if (string.Equals(command, "insertNewline:", StringComparison.Ordinal)
-                    || string.Equals(command, "cancelOperation:", StringComparison.Ordinal))
+                if (s_prevGetCaretRectCallback is not null)
                 {
-                    adapter._context.RaiseCompositionCompleted();
+                    Log($"OnImeGetCaretRect: forwarding to Uno callback for window=0x{windowHandle:X}");
+                    s_prevGetCaretRectCallback(windowHandle, out x, out y, out width, out height);
+                    return;
                 }
+
+                x = y = width = height = 0;
+                Log($"OnImeGetCaretRect: no adapter for window=0x{windowHandle:X}");
+                return;
             }
+
+            x = adapter._lastCaretX;
+            y = adapter._lastCaretY;
+            width = adapter._lastCaretW;
+            height = adapter._lastCaretH;
+            Log($"OnImeGetCaretRect: window=0x{windowHandle:X}, rect=({x:F1},{y:F1},{width:F1},{height:F1})");
         }
 
         private static void Log(string message)
         {
-            if (!s_debug)
-            {
-                return;
-            }
-
             try
             {
-                string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "unoedit_ime.log");
-                System.IO.File.AppendAllText(path, $"{DateTime.Now:HH:mm:ss.fff} [MacOSAdapter] {message}{Environment.NewLine}");
+                ImeLogging.AppendLine($"{DateTime.Now:HH:mm:ss.fff} [MacOSAdapter pid={Environment.ProcessId}] {message}");
             }
             catch
             {
@@ -439,48 +512,50 @@ namespace LeXtudio.UI.Text.Core
         }
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        private delegate void InsertTextDelegate(nint context, nint utf8Text);
+        private delegate void ImeInsertTextDelegate(nint windowHandle, nint textPtr, int length);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        private delegate void SetMarkedTextDelegate(
-            nint context,
-            nint utf8Text,
+        private delegate void ImeSetMarkedTextDelegate(
+            nint windowHandle,
+            nint textPtr,
+            int length,
             int selectedStart,
-            int selectedLength,
-            int replacementStart,
-            int replacementLength);
+            int selectedLength);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        private delegate void UnmarkTextDelegate(nint context);
+        private delegate void ImeUnmarkTextDelegate(nint windowHandle);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        private delegate void CommandDelegate(nint context, nint utf8Command);
+        private delegate void ImeGetCaretRectDelegate(
+            nint windowHandle,
+            out double x,
+            out double y,
+            out double width,
+            out double height);
 
         private static class NativeMethods
         {
-            [DllImport("libUnoEditMacInput.dylib", CallingConvention = CallingConvention.Cdecl)]
-            internal static extern nint unoedit_ime_create(
-                nint windowHandle,
-                nint managedContext,
+            [DllImport("libUnoNativeMac.dylib", CallingConvention = CallingConvention.Cdecl)]
+            internal static extern void uno_set_ime_callbacks(
                 nint insertTextCallback,
                 nint setMarkedTextCallback,
                 nint unmarkTextCallback,
-                nint commandCallback);
+                nint getCaretRectCallback);
 
-            [DllImport("libUnoEditMacInput.dylib", CallingConvention = CallingConvention.Cdecl)]
-            internal static extern void unoedit_ime_destroy(nint bridgeHandle);
+            [DllImport("libUnoNativeMac.dylib", CallingConvention = CallingConvention.Cdecl)]
+            internal static extern void uno_set_ime_active(nint windowHandle, [MarshalAs(UnmanagedType.I1)] bool active);
 
-            [DllImport("libUnoEditMacInput.dylib", CallingConvention = CallingConvention.Cdecl)]
-            internal static extern void unoedit_ime_focus(nint bridgeHandle, [MarshalAs(UnmanagedType.I1)] bool focus);
+            [DllImport("libUnoNativeMac.dylib", CallingConvention = CallingConvention.Cdecl)]
+            internal static extern IntPtr uno_get_ime_insert_text_callback();
 
-            [DllImport("libUnoEditMacInput.dylib", CallingConvention = CallingConvention.Cdecl)]
-            internal static extern void unoedit_ime_update_caret_rect(
-                nint bridgeHandle,
-                ulong eventId,
-                double x,
-                double y,
-                double width,
-                double height);
+            [DllImport("libUnoNativeMac.dylib", CallingConvention = CallingConvention.Cdecl)]
+            internal static extern IntPtr uno_get_ime_set_marked_text_callback();
+
+            [DllImport("libUnoNativeMac.dylib", CallingConvention = CallingConvention.Cdecl)]
+            internal static extern IntPtr uno_get_ime_unmark_text_callback();
+
+            [DllImport("libUnoNativeMac.dylib", CallingConvention = CallingConvention.Cdecl)]
+            internal static extern IntPtr uno_get_ime_get_caret_rect_callback();
         }
     }
 }
