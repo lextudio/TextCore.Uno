@@ -17,6 +17,7 @@ namespace LeXtudio.UI.Text.Core
         private const int WM_IME_STARTCOMPOSITION = 0x010D;
         private const int WM_IME_ENDCOMPOSITION = 0x010E;
         private const int WM_IME_COMPOSITION = 0x010F;
+        private const int WM_IME_CHAR = 0x0286;
         private const int GWLP_WNDPROC = -4;
 
         // IMM32 composition string indices
@@ -24,8 +25,6 @@ namespace LeXtudio.UI.Text.Core
         private const int GCS_RESULTSTR = 0x0800;
 
         // IMM32 composition form styles
-        private const int CFS_POINT = 0x0002;
-        private const int CFS_FORCE_POSITION = 0x0020;
         private const int CFS_CANDIDATEPOS = 0x0040;
 
         private static readonly ConcurrentDictionary<nint, WndProcDelegate> s_wndProcKeepAlive = new();
@@ -36,6 +35,7 @@ namespace LeXtudio.UI.Text.Core
         private WndProcDelegate? _wndProcDelegate; // prevent GC
         private CoreTextEditContext? _context;
         private bool _disposed;
+        private bool _hasFocus;
         private bool _isComposing;
         private int _selectionStart;
         private int _selectionEnd;
@@ -47,6 +47,7 @@ namespace LeXtudio.UI.Text.Core
         private double _caretY;
         private double _caretWidth;
         private double _caretHeight;
+        private double _rasterizationScale = 1d;
 
         private delegate nint WndProcDelegate(nint hwnd, int msg, nint wParam, nint lParam);
 
@@ -93,6 +94,7 @@ namespace LeXtudio.UI.Text.Core
             _caretY = y;
             _caretWidth = width;
             _caretHeight = height;
+            _rasterizationScale = scale > 0d ? scale : 1d;
             if (OwnsInput())
             {
                 PositionImeWindow();
@@ -100,10 +102,19 @@ namespace LeXtudio.UI.Text.Core
         }
 
         /// <inheritdoc />
-        public void NotifyFocusEnter() { }
+        public void NotifyFocusEnter()
+        {
+            _hasFocus = true;
+            PositionImeWindow();
+        }
 
         /// <inheritdoc />
-        public void NotifyFocusLeave() { }
+        public void NotifyFocusLeave()
+        {
+            _hasFocus = false;
+            _isComposing = false;
+            _compositionLength = 0;
+        }
 
         /// <inheritdoc />
         public void NotifySelectionChanged(CoreTextRange range)
@@ -162,11 +173,13 @@ namespace LeXtudio.UI.Text.Core
                     }
 
                     Log("WM_IME_STARTCOMPOSITION");
+                    nint startResult = CallWindowProcW(_originalWndProc, hwnd, msg, wParam, lParam);
                     _compositionStart = _selectionStart;
                     _compositionLength = Math.Max(0, _selectionEnd - _selectionStart);
                     _isComposing = true;
                     _context?.RaiseCompositionStarted();
-                    return nint.Zero;
+                    PositionImeWindow();
+                    return startResult;
 
                 case WM_IME_COMPOSITION:
                     if (!OwnsInput())
@@ -174,8 +187,10 @@ namespace LeXtudio.UI.Text.Core
                         return CallWindowProcW(_originalWndProc, hwnd, msg, wParam, lParam);
                     }
 
+                    nint compositionResult = CallWindowProcW(_originalWndProc, hwnd, msg, wParam, lParam);
                     HandleImeComposition(lParam);
-                    return nint.Zero;
+                    PositionImeWindow();
+                    return compositionResult;
 
                 case WM_IME_ENDCOMPOSITION:
                     if (!OwnsInput())
@@ -188,6 +203,19 @@ namespace LeXtudio.UI.Text.Core
                     _compositionLength = 0;
                     _context?.RaiseCompositionCompleted();
                     break;
+
+                case WM_IME_CHAR:
+                    if (!OwnsInput())
+                    {
+                        return CallWindowProcW(_originalWndProc, hwnd, msg, wParam, lParam);
+                    }
+
+                    if (TryHandleImeChar(wParam))
+                    {
+                        return nint.Zero;
+                    }
+
+                    return CallWindowProcW(_originalWndProc, hwnd, msg, wParam, lParam);
             }
 
             return CallWindowProcW(_originalWndProc, hwnd, msg, wParam, lParam);
@@ -195,18 +223,18 @@ namespace LeXtudio.UI.Text.Core
 
         private bool OwnsInput()
         {
-            return _context?.IsInputActiveNow() == true;
+            return _hasFocus && _context?.IsInputActiveNow() == true;
         }
 
         private void HandleImeComposition(nint lParam)
         {
-            int flags = (int)lParam.ToInt64();
+            int flags = unchecked((int)lParam.ToInt64());
+            Log($"WM_IME_COMPOSITION flags=0x{flags:X}");
 
             if ((flags & GCS_COMPSTR) != 0)
             {
                 string comp = GetCompositionString(GCS_COMPSTR);
                 Log($"GCS_COMPSTR: '{comp}'");
-                PositionImeWindow();
                 if (!_isComposing)
                 {
                     _compositionStart = _selectionStart;
@@ -248,6 +276,32 @@ namespace LeXtudio.UI.Text.Core
                     _context?.RaiseTextUpdating(args);
                 }
             }
+        }
+
+        private bool TryHandleImeChar(nint wParam)
+        {
+            int codeUnit = unchecked((int)wParam.ToInt64()) & 0xFFFF;
+            if (codeUnit == 0)
+            {
+                return false;
+            }
+
+            string text = ((char)codeUnit).ToString();
+            Log($"WM_IME_CHAR: '{text}'");
+            int rangeStart = _isComposing ? _compositionStart : _selectionStart;
+            int rangeEnd = _isComposing ? (_compositionStart + _compositionLength) : _selectionEnd;
+            var args = new CoreTextTextUpdatingEventArgs(text);
+            args.Range.StartCaretPosition = rangeStart;
+            args.Range.EndCaretPosition = rangeEnd;
+            args.NewSelection.StartCaretPosition = rangeStart + text.Length;
+            args.NewSelection.EndCaretPosition = rangeStart + text.Length;
+            _selectionStart = args.NewSelection.StartCaretPosition;
+            _selectionEnd = args.NewSelection.EndCaretPosition;
+            _compositionLength = 0;
+            _isComposing = false;
+            _context?.RaiseTextUpdating(args);
+            _context?.RaiseCompositionCompleted();
+            return true;
         }
 
         private string GetCompositionString(int dwIndex)
@@ -303,35 +357,38 @@ namespace LeXtudio.UI.Text.Core
 
             try
             {
-                double dpi = GetDpiForWindow(_hwnd) / 96.0;
-                var screenPt = new POINT
-                {
-                    x = (int)(_caretX * dpi),
-                    y = (int)(_caretY * dpi),
-                };
+                double scale = _rasterizationScale > 0d
+                    ? _rasterizationScale
+                    : GetDpiForWindow(_hwnd) / 96.0;
 
-                var compForm = new COMPOSITIONFORM
+                int left = ToPixel(_caretX, scale);
+                int bottom = ToPixel(_caretY + Math.Max(_caretHeight, 1d), scale);
+                int candidateY = bottom + ToPixel(2d, scale);
+
+                var anchorPoint = new POINT
                 {
-                    dwStyle = CFS_POINT | CFS_FORCE_POSITION,
-                    ptCurrentPos = screenPt,
+                    x = left,
+                    y = candidateY,
                 };
-                ImmSetCompositionWindow(himc, ref compForm);
 
                 var candForm = new CANDIDATEFORM
                 {
                     dwIndex = 0,
                     dwStyle = CFS_CANDIDATEPOS,
-                    ptCurrentPos = screenPt,
+                    ptCurrentPos = anchorPoint,
                 };
                 ImmSetCandidateWindow(himc, ref candForm);
 
-                Log($"PositionImeWindow: x={screenPt.x} y={screenPt.y}");
+                Log($"PositionImeWindow: x={anchorPoint.x} y={anchorPoint.y} scale={scale:0.###}");
             }
             finally
             {
                 ImmReleaseContext(_hwnd, himc);
             }
         }
+
+        private static int ToPixel(double value, double scale)
+            => (int)Math.Round(value * scale, MidpointRounding.AwayFromZero);
 
         // ----- Logging -----
 
