@@ -10,7 +10,10 @@ namespace LeXtudio.UI.Text.Core
     public static class ImeLogging
     {
         private static readonly object s_lock = new();
-        private static bool s_enabled;
+        private static bool s_enabled = string.Equals(
+            Environment.GetEnvironmentVariable("UNOEDIT_DEBUG_IME"),
+            "1",
+            StringComparison.Ordinal);
 
         public static bool Enabled
         {

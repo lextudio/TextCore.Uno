@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using System.Runtime.InteropServices;
 
 namespace LeXtudio.UI.Text.Core
@@ -10,13 +11,19 @@ namespace LeXtudio.UI.Text.Core
     /// </summary>
     internal sealed class LinuxIbusTextInputAdapter : IPlatformTextInputAdapter
     {
+        private static readonly object s_sharedGate = new();
+        private static LinuxIbusTextInputAdapter? s_activeSharedAdapter;
+
         private const uint IbusCapPreeditText = 1u << 0;
         private const uint IbusCapFocus = 1u << 3;
 
         private LinuxIBusConnection? _ibus;
+        private UnoX11ImeBridge? _unoBridge;
+        private bool _usingUnoSharedIme;
         private CoreTextEditContext? _context;
         private bool _disposed;
         private bool _isComposing;
+        private bool _suppressNextDirectCommit;
         private int _selectionStart;
         private int _selectionEnd;
         private int _compositionStart;
@@ -47,6 +54,14 @@ namespace LeXtudio.UI.Text.Core
             _x11Window = windowHandle;
             _x11Display = displayHandle;
 
+            _unoBridge = UnoX11ImeBridge.TryCreate(this);
+            if (_unoBridge is not null)
+            {
+                _usingUnoSharedIme = true;
+                Log("Attach succeeded: using Uno X11 shared IME bridge.");
+                return true;
+            }
+
             _ibus = LinuxIBusConnection.TryConnect();
             if (_ibus == null || !_ibus.IsConnected)
             {
@@ -63,11 +78,6 @@ namespace LeXtudio.UI.Text.Core
         /// <inheritdoc />
         public void NotifyCaretRectChanged(double x, double y, double width, double height, double scale)
         {
-            if (_ibus == null || !OwnsInput())
-            {
-                return;
-            }
-
             // Remember last caret rect/scale so NotifyLayoutChanged can reapply it.
             _lastCaretX = x;
             _lastCaretY = y;
@@ -80,7 +90,7 @@ namespace LeXtudio.UI.Text.Core
             int w = Math.Max(1, (int)(width * scale));
             int h = Math.Max(1, (int)(height * scale));
 
-            // Convert window-relative to screen-absolute for IBus candidate window placement.
+            // Convert window-relative to screen-absolute for IME candidate window placement.
             if (_x11Display != nint.Zero && _x11Window != nint.Zero)
             {
                 try
@@ -98,6 +108,20 @@ namespace LeXtudio.UI.Text.Core
                 }
             }
 
+            if (_usingUnoSharedIme)
+            {
+                if (IsActiveSharedOwner())
+                {
+                    _unoBridge?.TrySetCursorLocation(screenX, screenY, w, h);
+                }
+                return;
+            }
+
+            if (_ibus == null || !OwnsInput())
+            {
+                return;
+            }
+
             _ibus.SetCursorLocation(screenX, screenY, w, h);
         }
 
@@ -107,6 +131,15 @@ namespace LeXtudio.UI.Text.Core
         /// </summary>
         public void NotifyLayoutChanged()
         {
+            if (_usingUnoSharedIme)
+            {
+                if (_lastCaretScale != 0)
+                {
+                    NotifyCaretRectChanged(_lastCaretX, _lastCaretY, _lastCaretW, _lastCaretH, _lastCaretScale);
+                }
+                return;
+            }
+
             if (_ibus == null || _lastCaretScale == 0 || !OwnsInput())
             {
                 return;
@@ -157,6 +190,15 @@ namespace LeXtudio.UI.Text.Core
         /// <inheritdoc />
         public void NotifyFocusEnter()
         {
+            if (_usingUnoSharedIme)
+            {
+                lock (s_sharedGate)
+                {
+                    s_activeSharedAdapter = this;
+                }
+                return;
+            }
+
             if (OwnsInput())
             {
                 _ibus?.FocusIn();
@@ -164,11 +206,48 @@ namespace LeXtudio.UI.Text.Core
         }
 
         /// <inheritdoc />
-        public void NotifyFocusLeave() => _ibus?.FocusOut();
+        public void NotifyFocusLeave()
+        {
+            if (_usingUnoSharedIme)
+            {
+                lock (s_sharedGate)
+                {
+                    if (ReferenceEquals(s_activeSharedAdapter, this))
+                    {
+                        s_activeSharedAdapter = null;
+                    }
+                }
+                return;
+            }
+
+            _ibus?.FocusOut();
+        }
 
         /// <inheritdoc />
         public bool ProcessKeyEvent(int virtualKey, bool shiftPressed, bool controlPressed, char? unicodeKey = null)
         {
+            if (_usingUnoSharedIme)
+            {
+                if (!OwnsInput() || !IsActiveSharedOwner())
+                {
+                    return false;
+                }
+
+                if (controlPressed)
+                {
+                    return false;
+                }
+
+                // In shared mode, textual keys should be consumed by the Uno X11 IME
+                // channel to avoid duplicate editor insertion from fallback key paths.
+                if ((unicodeKey.HasValue && !char.IsControl(unicodeKey.Value)) || _unoBridge?.IsComposing == true)
+                {
+                    return true;
+                }
+
+                return false;
+            }
+
             if (_ibus == null || !_ibus.IsConnected || !OwnsInput())
             {
                 return false;
@@ -307,9 +386,346 @@ namespace LeXtudio.UI.Text.Core
 
             _disposed = true;
 
+            _unoBridge?.Dispose();
+            _unoBridge = null;
+            _usingUnoSharedIme = false;
+
+            lock (s_sharedGate)
+            {
+                if (ReferenceEquals(s_activeSharedAdapter, this))
+                {
+                    s_activeSharedAdapter = null;
+                }
+            }
+
             _ibus?.Dispose();
             _ibus = null;
             _context = null;
+        }
+
+        private bool IsActiveSharedOwner()
+        {
+            lock (s_sharedGate)
+            {
+                return ReferenceEquals(s_activeSharedAdapter, this);
+            }
+        }
+
+        private void OnUnoCompositionStarted()
+        {
+            if (!OwnsInput() || !IsActiveSharedOwner())
+            {
+                return;
+            }
+
+            if (_suppressNextDirectCommit && !_isComposing)
+            {
+                Log("OnUnoCompositionStarted: suppressed synthetic direct-commit start.");
+                return;
+            }
+
+            if (!_isComposing)
+            {
+                _isComposing = true;
+                _compositionStart = _selectionStart;
+                _compositionLength = Math.Max(0, _selectionEnd - _selectionStart);
+                _context?.RaiseCompositionStarted();
+            }
+        }
+
+        private void OnUnoCompositionUpdated(string text, int cursorPos)
+        {
+            if (!OwnsInput() || !IsActiveSharedOwner())
+            {
+                return;
+            }
+
+            if (string.IsNullOrEmpty(text))
+            {
+                if (_isComposing)
+                {
+                    _isComposing = false;
+                    _compositionAwaitingCommit = true;
+                }
+
+                return;
+            }
+
+            _suppressNextDirectCommit = false;
+
+            if (!_isComposing)
+            {
+                _isComposing = true;
+                _compositionStart = _selectionStart;
+                _compositionLength = Math.Max(0, _selectionEnd - _selectionStart);
+                _context?.RaiseCompositionStarted();
+            }
+
+            // X11 shared IME may report cursorPos=0 for whole-string preedit updates
+            // (especially CJK candidate flow). Keep caret at preedit end for editor parity.
+            int selectionInMarked = cursorPos <= 0 ? text.Length : Math.Clamp(cursorPos, 0, text.Length);
+
+            var args = new CoreTextTextUpdatingEventArgs(text);
+            args.Range.StartCaretPosition = _compositionStart;
+            args.Range.EndCaretPosition = _compositionStart + _compositionLength;
+            args.NewSelection.StartCaretPosition = _compositionStart + selectionInMarked;
+            args.NewSelection.EndCaretPosition = _compositionStart + selectionInMarked;
+            _compositionLength = text.Length;
+            _selectionStart = args.NewSelection.StartCaretPosition;
+            _selectionEnd = args.NewSelection.EndCaretPosition;
+            _context?.RaiseTextUpdating(args);
+        }
+
+        private void OnUnoCompositionCompleted(string text)
+        {
+            if (!OwnsInput() || !IsActiveSharedOwner())
+            {
+                return;
+            }
+
+            if (string.IsNullOrEmpty(text))
+            {
+                if (_isComposing)
+                {
+                    _isComposing = false;
+                    _compositionLength = 0;
+                    _compositionAwaitingCommit = false;
+                    // X11 shared IME frequently sends an empty completion first,
+                    // then a synthetic direct-commit cycle with the same final text.
+                    // Arm suppression so that follow-up cycle doesn't insert twice.
+                    _suppressNextDirectCommit = true;
+                    Log("OnUnoCompositionCompleted: empty completion; armed synthetic direct-commit suppression.");
+                    _context?.RaiseCompositionCompleted();
+                }
+
+                return;
+            }
+
+            if (_suppressNextDirectCommit && !_isComposing)
+            {
+                Log("OnUnoCompositionCompleted: suppressed synthetic direct-commit completion.");
+                _suppressNextDirectCommit = false;
+                return;
+            }
+
+            int rangeStart;
+            int rangeEnd;
+
+            if (_isComposing || _compositionAwaitingCommit)
+            {
+                rangeStart = _compositionStart;
+                rangeEnd = _compositionStart + _compositionLength;
+            }
+            else
+            {
+                rangeStart = _selectionStart;
+                rangeEnd = _selectionEnd;
+            }
+
+            var args = new CoreTextTextUpdatingEventArgs(text);
+            args.Range.StartCaretPosition = rangeStart;
+            args.Range.EndCaretPosition = rangeEnd;
+            args.NewSelection.StartCaretPosition = rangeStart + text.Length;
+            args.NewSelection.EndCaretPosition = rangeStart + text.Length;
+            _context?.RaiseTextUpdating(args);
+
+            _selectionStart = args.NewSelection.StartCaretPosition;
+            _selectionEnd = args.NewSelection.EndCaretPosition;
+            _isComposing = false;
+            _compositionAwaitingCommit = false;
+            _compositionLength = 0;
+            _suppressNextDirectCommit = true;
+            _context?.RaiseCompositionCompleted();
+        }
+
+        private sealed class UnoX11ImeBridge : IDisposable
+        {
+            private readonly LinuxIbusTextInputAdapter _owner;
+            private readonly object _instance;
+            private readonly EventInfo _startedEvent;
+            private readonly EventInfo _updatedEvent;
+            private readonly EventInfo _completedEvent;
+            private readonly FieldInfo? _dbusImeField;
+            private Delegate? _startedHandler;
+            private Delegate? _updatedHandler;
+            private Delegate? _completedHandler;
+
+            private UnoX11ImeBridge(
+                LinuxIbusTextInputAdapter owner,
+                object instance,
+                EventInfo startedEvent,
+                EventInfo updatedEvent,
+                EventInfo completedEvent,
+                FieldInfo? dbusImeField)
+            {
+                _owner = owner;
+                _instance = instance;
+                _startedEvent = startedEvent;
+                _updatedEvent = updatedEvent;
+                _completedEvent = completedEvent;
+                _dbusImeField = dbusImeField;
+            }
+
+            public bool IsComposing
+            {
+                get
+                {
+                    try
+                    {
+                        PropertyInfo? isComposing = _instance.GetType().GetProperty("IsComposing", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                        return (bool?)isComposing?.GetValue(_instance) == true;
+                    }
+                    catch
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            public static UnoX11ImeBridge? TryCreate(LinuxIbusTextInputAdapter owner)
+            {
+                try
+                {
+                    Type? extType = Type.GetType("Uno.WinUI.Runtime.Skia.X11.X11ImeTextBoxExtension, Uno.UI.Runtime.Skia.X11", false);
+                    if (extType is null)
+                    {
+                        return null;
+                    }
+
+                    PropertyInfo? instanceProp = extType.GetProperty("Instance", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+                    object? instance = instanceProp?.GetValue(null);
+                    if (instance is null)
+                    {
+                        return null;
+                    }
+
+                    EventInfo? startedEvent = extType.GetEvent("CompositionStarted", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                    EventInfo? updatedEvent = extType.GetEvent("CompositionUpdated", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                    EventInfo? completedEvent = extType.GetEvent("CompositionCompleted", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                    FieldInfo? dbusImeField = extType.GetField("_dbusIme", BindingFlags.Instance | BindingFlags.NonPublic);
+                    if (startedEvent?.EventHandlerType is null || updatedEvent?.EventHandlerType is null || completedEvent?.EventHandlerType is null)
+                    {
+                        return null;
+                    }
+
+                    MethodInfo startedMethod = typeof(UnoX11ImeBridge).GetMethod(nameof(OnStarted), BindingFlags.Instance | BindingFlags.NonPublic)!;
+                    MethodInfo updatedMethod = typeof(UnoX11ImeBridge).GetMethod(nameof(OnUpdated), BindingFlags.Instance | BindingFlags.NonPublic)!;
+                    MethodInfo completedMethod = typeof(UnoX11ImeBridge).GetMethod(nameof(OnCompleted), BindingFlags.Instance | BindingFlags.NonPublic)!;
+
+                    UnoX11ImeBridge bridge = new(
+                        owner,
+                        instance,
+                        startedEvent,
+                        updatedEvent,
+                        completedEvent,
+                        dbusImeField);
+
+                    bridge._startedHandler = Delegate.CreateDelegate(startedEvent.EventHandlerType, bridge, startedMethod);
+                    bridge._updatedHandler = Delegate.CreateDelegate(updatedEvent.EventHandlerType, bridge, updatedMethod);
+                    bridge._completedHandler = Delegate.CreateDelegate(completedEvent.EventHandlerType, bridge, completedMethod);
+
+                    startedEvent.AddEventHandler(instance, bridge._startedHandler);
+                    updatedEvent.AddEventHandler(instance, bridge._updatedHandler);
+                    completedEvent.AddEventHandler(instance, bridge._completedHandler);
+                    return bridge;
+                }
+                catch (Exception ex)
+                {
+                    Log($"UnoX11ImeBridge.TryCreate failed: {ex.Message}");
+                    return null;
+                }
+            }
+
+            public void Dispose()
+            {
+                if (_startedHandler is not null)
+                {
+                    try { _startedEvent.RemoveEventHandler(_instance, _startedHandler); } catch { }
+                    _startedHandler = null;
+                }
+
+                if (_updatedHandler is not null)
+                {
+                    try { _updatedEvent.RemoveEventHandler(_instance, _updatedHandler); } catch { }
+                    _updatedHandler = null;
+                }
+
+                if (_completedHandler is not null)
+                {
+                    try { _completedEvent.RemoveEventHandler(_instance, _completedHandler); } catch { }
+                    _completedHandler = null;
+                }
+            }
+
+            public bool TrySetCursorLocation(int x, int y, int w, int h)
+            {
+                try
+                {
+                    object? dbusIme = _dbusImeField?.GetValue(_instance);
+                    if (dbusIme is null)
+                    {
+                        Log("UnoX11ImeBridge.TrySetCursorLocation: _dbusIme is null.");
+                        return false;
+                    }
+
+                    PropertyInfo? enabledProp = dbusIme.GetType().GetProperty("IsEnabled", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                    if ((bool?)enabledProp?.GetValue(dbusIme) != true)
+                    {
+                        Log("UnoX11ImeBridge.TrySetCursorLocation: _dbusIme is not enabled.");
+                        return false;
+                    }
+
+                    MethodInfo? setCursorLocation = dbusIme.GetType().GetMethod("SetCursorLocation", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                    if (setCursorLocation is null)
+                    {
+                        Log("UnoX11ImeBridge.TrySetCursorLocation: SetCursorLocation method not found.");
+                        return false;
+                    }
+
+                    setCursorLocation.Invoke(dbusIme, new object[] { x, y, w, h });
+                    Log($"UnoX11ImeBridge.TrySetCursorLocation: x={x} y={y} w={w} h={h}");
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    Log($"UnoX11ImeBridge.TrySetCursorLocation failed: {ex.Message}");
+                    return false;
+                }
+            }
+
+            private void OnStarted(object? sender, EventArgs e)
+            {
+                _owner.OnUnoCompositionStarted();
+            }
+
+            private void OnUpdated(object? sender, object e)
+            {
+                try
+                {
+                    Type t = e.GetType();
+                    string text = (string?)t.GetProperty("Text")?.GetValue(e) ?? string.Empty;
+                    int cursorPos = (int?)t.GetProperty("CursorPosition")?.GetValue(e) ?? -1;
+                    _owner.OnUnoCompositionUpdated(text, cursorPos);
+                }
+                catch (Exception ex)
+                {
+                    Log($"UnoX11ImeBridge.OnUpdated failed: {ex.Message}");
+                }
+            }
+
+            private void OnCompleted(object? sender, object e)
+            {
+                try
+                {
+                    Type t = e.GetType();
+                    string text = (string?)t.GetProperty("Text")?.GetValue(e) ?? string.Empty;
+                    _owner.OnUnoCompositionCompleted(text);
+                }
+                catch (Exception ex)
+                {
+                    Log($"UnoX11ImeBridge.OnCompleted failed: {ex.Message}");
+                }
+            }
         }
 
         private void HandleCommitText(LinuxDBusMessage msg)
