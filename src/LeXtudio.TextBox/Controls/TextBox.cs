@@ -18,6 +18,8 @@ namespace LeXtudio.UI.Controls;
 /// </summary>
 public sealed class TextBox : UserControl, IDisposable
 {
+    private static readonly FontFamily s_defaultFontFamily = new("Open Sans");
+
     public static readonly DependencyProperty TextProperty =
         DependencyProperty.Register(
             nameof(Text),
@@ -230,10 +232,13 @@ public sealed class TextBox : UserControl, IDisposable
 
     public TextBox()
     {
+        FontFamily = s_defaultFontFamily;
+
         _textBox = new Microsoft.UI.Xaml.Controls.TextBox
         {
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Stretch,
+            FontFamily = FontFamily,
             PlaceholderText = PlaceholderText,
             Header = Header,
             AcceptsReturn = AcceptsReturn,
@@ -264,6 +269,8 @@ public sealed class TextBox : UserControl, IDisposable
             _textBox.Foreground = ((TextBox)d).Foreground);
         RegisterPropertyChangedCallback(PaddingProperty, (d, _) =>
             _textBox.Padding = ((TextBox)d).Padding);
+        RegisterPropertyChangedCallback(FontFamilyProperty, (d, _) =>
+            _textBox.FontFamily = ((TextBox)d).FontFamily);
 
         HorizontalContentAlignment = HorizontalAlignment.Stretch;
         VerticalContentAlignment = VerticalAlignment.Stretch;
