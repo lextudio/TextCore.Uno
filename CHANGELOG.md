@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented in this file. This project follows the "Keep a Changelog" format.
 
+## [v0.2.12] - 2026-05-27
+
+- Improved for UnoPropertyGrid theming.
+
 ## [v0.2.11] - 2026-05-17
 
 - Enhanced formatting and command integration in text box.
