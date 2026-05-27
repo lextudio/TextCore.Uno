@@ -271,6 +271,16 @@ public sealed class TextBox : UserControl, IDisposable
             _textBox.Padding = ((TextBox)d).Padding);
         RegisterPropertyChangedCallback(FontFamilyProperty, (d, _) =>
             _textBox.FontFamily = ((TextBox)d).FontFamily);
+        // Forward the box-frame properties so a host that explicitly sets them on the
+        // wrapper (e.g. CornerRadius="0" for a flat, square look) actually reaches the
+        // inner platform TextBox. Not seeded in the constructor so consumers that leave
+        // them unset keep the inner control's default border/corner styling.
+        RegisterPropertyChangedCallback(CornerRadiusProperty, (d, _) =>
+            ((TextBox)d)._textBox.CornerRadius = ((TextBox)d).CornerRadius);
+        RegisterPropertyChangedCallback(BorderThicknessProperty, (d, _) =>
+            ((TextBox)d)._textBox.BorderThickness = ((TextBox)d).BorderThickness);
+        RegisterPropertyChangedCallback(BorderBrushProperty, (d, _) =>
+            ((TextBox)d)._textBox.BorderBrush = ((TextBox)d).BorderBrush);
 
         HorizontalContentAlignment = HorizontalAlignment.Stretch;
         VerticalContentAlignment = VerticalAlignment.Stretch;
@@ -344,8 +354,25 @@ public sealed class TextBox : UserControl, IDisposable
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
+        SeedInnerBoxFrame();
         EnsureContext();
         SyncPlatformState();
+    }
+
+    // Forward the box-frame properties the host explicitly set on the wrapper. The change
+    // callbacks above only fire when the value differs from the property default, so a host
+    // value that equals the default (e.g. CornerRadius="0", BorderThickness="0") would never
+    // reach the inner platform TextBox. Checking ReadLocalValue lets an explicit-but-default
+    // value through while leaving the inner control's own defaults intact for hosts that set
+    // nothing.
+    private void SeedInnerBoxFrame()
+    {
+        if (ReadLocalValue(CornerRadiusProperty) != DependencyProperty.UnsetValue)
+            _textBox.CornerRadius = CornerRadius;
+        if (ReadLocalValue(BorderThicknessProperty) != DependencyProperty.UnsetValue)
+            _textBox.BorderThickness = BorderThickness;
+        if (ReadLocalValue(BorderBrushProperty) != DependencyProperty.UnsetValue)
+            _textBox.BorderBrush = BorderBrush;
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
