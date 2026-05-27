@@ -281,6 +281,13 @@ public sealed class TextBox : UserControl, IDisposable
             ((TextBox)d)._textBox.BorderThickness = ((TextBox)d).BorderThickness);
         RegisterPropertyChangedCallback(BorderBrushProperty, (d, _) =>
             ((TextBox)d)._textBox.BorderBrush = ((TextBox)d).BorderBrush);
+        // Forward sizing so a host can make the box compact. The inner platform TextBox
+        // otherwise imposes its own default MinHeight (~32) and would ignore a smaller
+        // wrapper height.
+        RegisterPropertyChangedCallback(MinHeightProperty, (d, _) =>
+            ((TextBox)d)._textBox.MinHeight = ((TextBox)d).MinHeight);
+        RegisterPropertyChangedCallback(HeightProperty, (d, _) =>
+            ((TextBox)d)._textBox.Height = ((TextBox)d).Height);
 
         HorizontalContentAlignment = HorizontalAlignment.Stretch;
         VerticalContentAlignment = VerticalAlignment.Stretch;
@@ -373,6 +380,10 @@ public sealed class TextBox : UserControl, IDisposable
             _textBox.BorderThickness = BorderThickness;
         if (ReadLocalValue(BorderBrushProperty) != DependencyProperty.UnsetValue)
             _textBox.BorderBrush = BorderBrush;
+        if (ReadLocalValue(MinHeightProperty) != DependencyProperty.UnsetValue)
+            _textBox.MinHeight = MinHeight;
+        if (ReadLocalValue(HeightProperty) != DependencyProperty.UnsetValue)
+            _textBox.Height = Height;
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
