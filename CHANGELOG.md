@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented in this file. This project follows the "Keep a Changelog" format.
 
+## [v0.2.13] - 2026-05-27
+
+- Restored WinUI 3 stub.
+
 ## [v0.2.12] - 2026-05-27
 
 - Improved for UnoPropertyGrid theming.
