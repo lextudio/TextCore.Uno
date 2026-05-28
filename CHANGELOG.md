@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented in this file. This project follows the "Keep a Changelog" format.
 
+## [v0.2.14] - 2026-05-27
+
+- Removed wrong dependencies for WinUI 3.
+
 ## [v0.2.13] - 2026-05-27
 
 - Restored WinUI 3 stub.
