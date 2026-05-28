@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented in this file. This project follows the "Keep a Changelog" format.
 
+## [v0.2.15] - 2026-06-09
+
+- Add theme resource management.
+
 ## [v0.2.14] - 2026-05-27
 
 - Removed wrong dependencies for WinUI 3.

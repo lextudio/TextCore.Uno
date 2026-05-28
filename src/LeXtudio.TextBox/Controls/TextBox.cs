@@ -19,6 +19,34 @@ namespace LeXtudio.UI.Controls;
 public sealed class TextBox : UserControl, IDisposable
 {
     private static readonly FontFamily s_defaultFontFamily = new("Open Sans");
+    private static readonly string[] s_textControlResourceKeys =
+    [
+        "TextControlBackground",
+        "TextControlBackgroundPointerOver",
+        "TextControlBackgroundFocused",
+        "TextControlBackgroundDisabled",
+        "TextControlBackgroundReadOnly",
+        "TextControlBackgroundReadOnlyPointerOver",
+        "TextControlBackgroundReadOnlyFocused",
+        "TextControlBackgroundFocusedPointerOver",
+        "TextControlForeground",
+        "TextControlForegroundPointerOver",
+        "TextControlForegroundFocused",
+        "TextControlForegroundDisabled",
+        "TextControlForegroundReadOnly",
+        "TextControlForegroundReadOnlyPointerOver",
+        "TextControlForegroundReadOnlyFocused",
+        "TextControlPlaceholderForeground",
+        "TextControlPlaceholderForegroundPointerOver",
+        "TextControlPlaceholderForegroundFocused",
+        "TextControlBorderBrush",
+        "TextControlBorderBrushPointerOver",
+        "TextControlBorderBrushFocused",
+        "TextControlBorderBrushDisabled",
+        "TextControlBorderBrushReadOnly",
+        "TextControlBorderBrushReadOnlyPointerOver",
+        "TextControlBorderBrushReadOnlyFocused"
+    ];
 
     public static readonly DependencyProperty TextProperty =
         DependencyProperty.Register(
@@ -254,6 +282,11 @@ public sealed class TextBox : UserControl, IDisposable
         _textBox.LostFocus += OnTextBoxLostFocus;
         _textBox.SelectionChanged += OnTextBoxSelectionChanged;
         _textBox.KeyDown += OnTextBoxKeyDown;
+        _textBox.Loaded += (_, _) => RefreshThemeResources();
+        _textBox.PointerEntered += (_, _) => PatchTemplateBackgroundSoon();
+        _textBox.PointerExited += (_, _) => PatchTemplateBackgroundSoon();
+        _textBox.GotFocus += (_, _) => PatchTemplateBackgroundSoon();
+        _textBox.LostFocus += (_, _) => PatchTemplateBackgroundSoon();
         AddFormattingKeyboardAccelerator(VirtualKey.B);
         AddFormattingKeyboardAccelerator(VirtualKey.I);
         AddFormattingKeyboardAccelerator(VirtualKey.U);
@@ -298,6 +331,25 @@ public sealed class TextBox : UserControl, IDisposable
     {
         DisposeContext();
         GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    /// Copies host-provided text control theme resources from the wrapper to the inner platform text box.
+    /// </summary>
+    public void RefreshThemeResources()
+    {
+        _textBox.Background = Background;
+        _textBox.Foreground = Foreground;
+        _textBox.BorderBrush = BorderBrush;
+        _textBox.PlaceholderForeground = PlaceholderForeground;
+
+        foreach (var key in s_textControlResourceKeys)
+        {
+            if (Resources.TryGetValue(key, out var value))
+                _textBox.Resources[key] = value;
+        }
+
+        PatchTemplateBackgroundSoon();
     }
 
     private static void OnTextPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -359,9 +411,30 @@ public sealed class TextBox : UserControl, IDisposable
         control._textBox.PlaceholderForeground = e.NewValue as Brush;
     }
 
+    private void PatchTemplateBackgroundSoon()
+    {
+        DispatcherQueue?.TryEnqueue(() =>
+        {
+            PatchTemplateBackground(_textBox, Background);
+        });
+    }
+
+    private static void PatchTemplateBackground(DependencyObject root, Brush brush)
+    {
+        var count = VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < count; i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is Border border && (border.Name == "BackgroundElement" || border.Name == "BorderElement"))
+                border.Background = brush;
+            PatchTemplateBackground(child, brush);
+        }
+    }
+
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         SeedInnerBoxFrame();
+        RefreshThemeResources();
         EnsureContext();
         SyncPlatformState();
     }
