@@ -48,6 +48,9 @@ public sealed class TextBox : UserControl, IDisposable
         "TextControlBorderBrushReadOnlyFocused"
     ];
 
+    /// <summary>
+    /// Gets or sets the text content of the TextBox.
+    /// </summary>
     public static readonly DependencyProperty TextProperty =
         DependencyProperty.Register(
             nameof(Text),
@@ -55,6 +58,9 @@ public sealed class TextBox : UserControl, IDisposable
             typeof(TextBox),
             new PropertyMetadata(string.Empty, OnTextPropertyChanged));
 
+    /// <summary>
+    /// Gets or sets the placeholder text displayed when the TextBox is empty.
+    /// </summary>
     public static readonly DependencyProperty PlaceholderTextProperty =
         DependencyProperty.Register(
             nameof(PlaceholderText),
@@ -62,6 +68,9 @@ public sealed class TextBox : UserControl, IDisposable
             typeof(TextBox),
             new PropertyMetadata("Type here...", OnPlaceholderTextPropertyChanged));
 
+    /// <summary>
+    /// Gets or sets the header content displayed above the TextBox.
+    /// </summary>
     public static readonly DependencyProperty HeaderProperty =
         DependencyProperty.Register(
             nameof(Header),
@@ -69,6 +78,9 @@ public sealed class TextBox : UserControl, IDisposable
             typeof(TextBox),
             new PropertyMetadata(null, OnHeaderPropertyChanged));
 
+    /// <summary>
+    /// Gets or sets a value indicating whether the TextBox accepts line breaks (newlines).
+    /// </summary>
     public static readonly DependencyProperty AcceptsReturnProperty =
         DependencyProperty.Register(
             nameof(AcceptsReturn),
@@ -76,6 +88,9 @@ public sealed class TextBox : UserControl, IDisposable
             typeof(TextBox),
             new PropertyMetadata(false, OnAcceptsReturnPropertyChanged));
 
+    /// <summary>
+    /// Gets or sets the text wrapping behavior for the TextBox.
+    /// </summary>
     public static readonly DependencyProperty TextWrappingProperty =
         DependencyProperty.Register(
             nameof(TextWrapping),
@@ -83,6 +98,9 @@ public sealed class TextBox : UserControl, IDisposable
             typeof(TextBox),
             new PropertyMetadata(TextWrapping.NoWrap, OnTextWrappingPropertyChanged));
 
+    /// <summary>
+    /// Gets or sets the foreground brush for placeholder text when the TextBox is empty.
+    /// </summary>
     public static readonly DependencyProperty PlaceholderForegroundProperty =
         DependencyProperty.Register(
             nameof(PlaceholderForeground),
@@ -90,6 +108,9 @@ public sealed class TextBox : UserControl, IDisposable
             typeof(TextBox),
             new PropertyMetadata(null, OnPlaceholderForegroundPropertyChanged));
 
+    /// <summary>
+    /// Gets or sets a value indicating whether the TextBox is read-only (cannot be edited).
+    /// </summary>
     public static readonly DependencyProperty IsReadOnlyProperty =
         DependencyProperty.Register(
             nameof(IsReadOnly),
@@ -97,6 +118,9 @@ public sealed class TextBox : UserControl, IDisposable
             typeof(TextBox),
             new PropertyMetadata(false, OnIsReadOnlyPropertyChanged));
 
+    /// <summary>
+    /// Gets or sets the input scope for the TextBox to support specific input methods.
+    /// </summary>
     public static readonly DependencyProperty InputScopeProperty =
         DependencyProperty.Register(
             nameof(InputScope),
@@ -104,6 +128,9 @@ public sealed class TextBox : UserControl, IDisposable
             typeof(TextBox),
             new PropertyMetadata(null, OnInputScopePropertyChanged));
 
+    /// <summary>
+    /// Gets or sets the text alignment (left, center, right, etc.) for the TextBox content.
+    /// </summary>
     public static readonly DependencyProperty TextAlignmentProperty =
         DependencyProperty.Register(
             nameof(TextAlignment),
@@ -114,7 +141,7 @@ public sealed class TextBox : UserControl, IDisposable
     private readonly Microsoft.UI.Xaml.Controls.TextBox _textBox;
 
     /// <summary>The inner platform TextBox. Exposed so hosts can configure
-    /// surface-level state (e.g. <see cref="FrameworkElement.ContextFlyout"/>)
+    /// surface-level state (e.g. <see cref="Windows.UI.Xaml.UIElement.ContextFlyout"/>)
     /// that the platform consults directly instead of bubbling up to this
     /// shim.</summary>
     public Microsoft.UI.Xaml.Controls.TextBox InnerTextBox => _textBox;
@@ -130,11 +157,13 @@ public sealed class TextBox : UserControl, IDisposable
     private int _selectionLengthBeforeFormattingAccelerator;
     private static readonly string s_diagnosticLogPath = Path.Combine(Path.GetTempPath(), "LeXtudio.RichText.TextBox.log");
 
+    /// <summary>Gets or sets a value indicating whether diagnostics logging is enabled for the TextBox.</summary>
     public static bool DiagnosticsEnabled { get; set; }
 
+    /// <summary>Raised when the TextBox text content changes.</summary>
     public event TextChangedEventHandler? TextChanged;
 
-    /// <summary>Raised when the selection changes inside the inner TextBox.</summary>
+    /// <summary>Raised when the selection range changes inside the TextBox.</summary>
     public event RoutedEventHandler? SelectionChanged;
 
     /// <summary>Raised for Ctrl+B/I/U before the inner platform text box can mutate the selection.</summary>
@@ -204,60 +233,70 @@ public sealed class TextBox : UserControl, IDisposable
         SelectRange(caret, 0);
     }
 
+    /// <summary>Gets or sets the text content of the TextBox.</summary>
     public string Text
     {
         get => (string)GetValue(TextProperty);
         set => SetValue(TextProperty, value ?? string.Empty);
     }
 
+    /// <summary>Gets or sets the placeholder text displayed when the TextBox is empty.</summary>
     public string PlaceholderText
     {
         get => (string)GetValue(PlaceholderTextProperty);
         set => SetValue(PlaceholderTextProperty, value ?? string.Empty);
     }
 
+    /// <summary>Gets or sets the header content displayed above the TextBox.</summary>
     public object? Header
     {
         get => GetValue(HeaderProperty);
         set => SetValue(HeaderProperty, value);
     }
 
+    /// <summary>Gets or sets a value indicating whether the TextBox accepts line breaks (newlines).</summary>
     public bool AcceptsReturn
     {
         get => (bool)GetValue(AcceptsReturnProperty);
         set => SetValue(AcceptsReturnProperty, value);
     }
 
+    /// <summary>Gets or sets the text wrapping behavior for the TextBox.</summary>
     public TextWrapping TextWrapping
     {
         get => (TextWrapping)GetValue(TextWrappingProperty);
         set => SetValue(TextWrappingProperty, value);
     }
 
+    /// <summary>Gets or sets the foreground brush for placeholder text when the TextBox is empty.</summary>
     public Brush? PlaceholderForeground
     {
         get => (Brush?)GetValue(PlaceholderForegroundProperty);
         set => SetValue(PlaceholderForegroundProperty, value);
     }
 
+    /// <summary>Gets or sets a value indicating whether the TextBox is read-only (cannot be edited).</summary>
     public bool IsReadOnly
     {
         get => (bool)GetValue(IsReadOnlyProperty);
         set => SetValue(IsReadOnlyProperty, value);
     }
 
+    /// <summary>Gets or sets the input scope for the TextBox to support specific input methods.</summary>
     public InputScope? InputScope
     {
         get => (InputScope?)GetValue(InputScopeProperty);
         set => SetValue(InputScopeProperty, value);
     }
 
+    /// <summary>Gets or sets the text alignment (left, center, right, etc.) for the TextBox content.</summary>
     public TextAlignment TextAlignment
     {
         get => (TextAlignment)GetValue(TextAlignmentProperty);
         set => SetValue(TextAlignmentProperty, value);
     }
 
+    /// <summary>Initializes a new instance of the <see cref="TextBox"/> class.</summary>
     public TextBox()
     {
         FontFamily = s_defaultFontFamily;
@@ -327,6 +366,9 @@ public sealed class TextBox : UserControl, IDisposable
         Content = new Grid { Children = { _textBox } };
     }
 
+    /// <summary>
+    /// Cleans up resources used by the TextBox.
+    /// </summary>
     public new void Dispose()
     {
         DisposeContext();
@@ -1094,6 +1136,7 @@ public sealed class TextBox : UserControl, IDisposable
         _compositionLength = 0;
     }
 
+    /// <summary>Selects all text in the TextBox.</summary>
     public void SelectAll() => SelectRange(0, _textBox.Text?.Length ?? 0);
 
     private void SelectRange(int start, int length)
@@ -1198,11 +1241,16 @@ public sealed class TextBox : UserControl, IDisposable
     }
 }
 
+/// <summary>Specifies text formatting accelerator commands triggered via keyboard shortcuts (Ctrl+B, Ctrl+I, Ctrl+U).</summary>
 public enum TextFormattingAccelerator
 {
+    /// <summary>No accelerator.</summary>
     None,
+    /// <summary>Bold (Ctrl+B).</summary>
     Bold,
+    /// <summary>Italic (Ctrl+I).</summary>
     Italic,
+    /// <summary>Underline (Ctrl+U).</summary>
     Underline,
 }
 
@@ -1215,11 +1263,16 @@ public enum TextEditingCommand
     Redo,
 }
 
+/// <summary>Provides data for the <see cref="TextBox.FormattingAcceleratorRequested"/> event.</summary>
 public sealed class TextFormattingAcceleratorRequestedEventArgs(TextFormattingAccelerator accelerator, int selectionStart, int selectionLength) : EventArgs
 {
+    /// <summary>Gets the requested formatting accelerator (Bold, Italic, Underline).</summary>
     public TextFormattingAccelerator Accelerator { get; } = accelerator;
+    /// <summary>Gets the selection start position when the accelerator was invoked.</summary>
     public int SelectionStart { get; } = selectionStart;
+    /// <summary>Gets the selection length when the accelerator was invoked.</summary>
     public int SelectionLength { get; } = selectionLength;
+    /// <summary>Gets or sets whether the accelerator was handled by the document owner.</summary>
     public bool Handled { get; set; }
 }
 
