@@ -8,14 +8,14 @@
     <UnoFeatures>SkiaRenderer</UnoFeatures>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
-    <UseNuGetPackage>false</UseNuGetPackage>
+    <UseNuGetPackages>false</UseNuGetPackages>
   </PropertyGroup>
 
-  <ItemGroup Condition="'$(UseNuGetPackage)' != 'true'">
+  <ItemGroup Condition="'$(UseNuGetPackages)' != 'true'">
     <ProjectReference Include="$(MSBuildThisFileDirectory)../LeXtudio.TextBox/LeXtudio.TextBox.csproj" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(UseNuGetPackage)' == 'true'">
+  <ItemGroup Condition="'$(UseNuGetPackages)' == 'true'">
     <PackageReference Include="LeXtudio.TextBox" />
   </ItemGroup>
 
@@ -26,7 +26,7 @@
 
   <!-- If the native macOS IME bridge was built in the core project, copy it to this sample's output so
        the DllImport("libUnoEditMacInput.dylib") can find it at runtime. -->
-  <Target Name="CopyMacImeDylibToOutput" AfterTargets="Build" Condition="'$(UseNuGetPackage)' != 'true'">
+  <Target Name="CopyMacImeDylibToOutput" AfterTargets="Build" Condition="'$(UseNuGetPackages)' != 'true'">
     <PropertyGroup>
       <CoreDylibPath>$(MSBuildThisFileDirectory)..\src\bin\$(Configuration)\net10.0-desktop\libUnoEditMacInput.dylib</CoreDylibPath>
       <DestDylib>$(OutputPath)libUnoEditMacInput.dylib</DestDylib>
