@@ -2,21 +2,21 @@
 set -euo pipefail
 
 # dist.all.sh — Build native macOS bridge and pack LeXtudio.UI.Text.Core nupkg.
-# Must run on macOS (AppKit is required to build libUnoEditMacInput.dylib).
+# Must run on macOS (AppKit is required to build libTextCoreNativeMacInput.dylib).
 # Usage: ./dist.all.sh [Configuration] [PackageVersion]
-# Example: ./dist.all.sh Release 0.2.1
+# Example: ./dist.all.sh Release 0.3.0
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 UNAME_STR="$(uname -s 2>/dev/null || echo unknown)"
 if [[ "$UNAME_STR" != Darwin* ]]; then
-  echo "Error: dist.all.sh must run on macOS (AppKit required for libUnoEditMacInput.dylib)." >&2
+  echo "Error: dist.all.sh must run on macOS (AppKit required for libTextCoreNativeMacInput.dylib)." >&2
   exit 1
 fi
 
 CONFIG=${1:-Release}
-PKGVER=${2:-0.2.1}
+PKGVER=${2:-1.0.0}
 PROJECT="src/LeXtudio.UI.Text.Core/LeXtudio.UI.Text.Core.csproj"
 OUT_DIR="$SCRIPT_DIR/dist"
 
@@ -28,7 +28,7 @@ mkdir -p "$OUT_DIR"
 echo "Restoring packages..."
 dotnet restore "$PROJECT"
 
-echo "Building Uno desktop target and native macOS bridge..."
+echo "Building core target and native macOS bridge..."
 dotnet build "$PROJECT" -c "$CONFIG" /t:Build,BuildTextCoreMacInputBridge
 
 echo "Packing nupkg to $OUT_DIR (unsigned)..."
@@ -40,7 +40,7 @@ ls -la "$OUT_DIR" || true
 echo "Verifying runtimes entries in package:"
 for f in "$OUT_DIR"/*.nupkg; do
   echo "--- $f ---"
-  unzip -l "$f" | grep -E 'runtimes/.+libUnoEditMacInput.dylib' || echo "(no runtimes entry found)"
+  unzip -l "$f" | grep -E 'runtimes/.+libTextCoreNativeMacInput.dylib' || echo "(no runtimes entry found)"
 done
 
 echo "Done. Unsigned packages are in $OUT_DIR"

@@ -1,5 +1,3 @@
-using System;
-
 namespace LeXtudio.UI.Text.Core
 {
     /// <summary>

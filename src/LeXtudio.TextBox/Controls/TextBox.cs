@@ -893,8 +893,9 @@ public sealed class TextBox : UserControl, IDisposable
             _context.FocusRemoved += OnFocusRemoved;
             _context.CommandReceived += OnCommandReceived;
 
-            bool attached = _context.AttachToCurrentWindow(Window.Current);
-            Debug.WriteLine($"TextBox attached CoreTextEditContext: {attached}");
+            bool resolved = CoreTextNativeWindowResolver.TryResolve(Window.Current, out nint windowHandle, out nint displayHandle);
+            bool attached = resolved && _context.AttachToWindowHandle(windowHandle, displayHandle);
+            Debug.WriteLine($"TextBox attached CoreTextEditContext: {attached} window=0x{windowHandle:X} display=0x{displayHandle:X}");
             return attached;
         }
         catch (Exception ex)

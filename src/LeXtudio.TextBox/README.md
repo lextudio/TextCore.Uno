@@ -20,8 +20,8 @@ involved and there is no behavioural difference from the inbox control.
 
 | Target framework              | Behaviour |
 |-------------------------------|-----------|
-| `net9.0-desktop` (Uno Skia)   | Full IME bridge via `LeXtudio.UI.Text.Core` |
-| `net9.0-windows10.0.19041.0`  | Thin subclass of the native WinUI `TextBox` |
+| `net10.0-desktop` (Uno Skia)  | Full IME bridge via `LeXtudio.UI.Text.Core` |
+| `net10.0-windows10.0.19041.0` | Thin subclass of the native WinUI `TextBox` |
 
 ## Installation
 
@@ -32,7 +32,7 @@ dotnet add package LeXtudio.TextBox
 Or add a `PackageReference` to your project file:
 
 ```xml
-<PackageReference Include="LeXtudio.TextBox" Version="0.2.11" />
+<PackageReference Include="LeXtudio.TextBox" Version="0.3.0" />
 ```
 
 ## Usage

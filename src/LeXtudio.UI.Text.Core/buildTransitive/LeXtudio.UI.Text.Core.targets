@@ -4,9 +4,9 @@
           AfterTargets="Build"
           Condition="'$(OS)' == 'Unix' and Exists('/System/Library/Frameworks/AppKit.framework')">
     <PropertyGroup>
-      <!-- Try NuGet package location first, then project reference build output -->
-      <LeXtudioMacDylibPath Condition="Exists('$(MSBuildThisFileDirectory)../../runtimes/osx/native/libUnoEditMacInput.dylib')">$(MSBuildThisFileDirectory)../../runtimes/osx/native/libUnoEditMacInput.dylib</LeXtudioMacDylibPath>
-      <LeXtudioMacDylibPath Condition="'$(LeXtudioMacDylibPath)' == '' and Exists('$(MSBuildThisFileDirectory)../../bin/$(Configuration)/net9.0-desktop/libUnoEditMacInput.dylib')">$(MSBuildThisFileDirectory)../../bin/$(Configuration)/net9.0-desktop/libUnoEditMacInput.dylib</LeXtudioMacDylibPath>
+      <LeXtudioMacDylibPath Condition="Exists('$(MSBuildThisFileDirectory)../../runtimes/osx/native/libTextCoreNativeMacInput.dylib')">$(MSBuildThisFileDirectory)../../runtimes/osx/native/libTextCoreNativeMacInput.dylib</LeXtudioMacDylibPath>
+      <LeXtudioMacDylibPath Condition="'$(LeXtudioMacDylibPath)' == '' and Exists('$(MSBuildThisFileDirectory)../../runtimes/osx-arm64/native/libTextCoreNativeMacInput.dylib')">$(MSBuildThisFileDirectory)../../runtimes/osx-arm64/native/libTextCoreNativeMacInput.dylib</LeXtudioMacDylibPath>
+      <LeXtudioMacDylibPath Condition="'$(LeXtudioMacDylibPath)' == '' and Exists('$(MSBuildThisFileDirectory)../../runtimes/osx-x64/native/libTextCoreNativeMacInput.dylib')">$(MSBuildThisFileDirectory)../../runtimes/osx-x64/native/libTextCoreNativeMacInput.dylib</LeXtudioMacDylibPath>
     </PropertyGroup>
 
     <Copy SourceFiles="$(LeXtudioMacDylibPath)"

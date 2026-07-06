@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented in this file. This project follows the "Keep a Changelog" format.
 
+## [v1.0.0] - 2026-07-06
+
+- Removed Uno dependency to allow core library usage in non-Uno projects.
+
 ## [v0.2.15] - 2026-06-09
 
 - Add theme resource management.

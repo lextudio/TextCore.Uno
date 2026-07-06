@@ -19,23 +19,23 @@ git submodule update --init --recursive
 
 ## Building the macOS native helper
 
-When targeting macOS the project includes a tiny native helper (`libUnoEditMacInput.dylib`) that bridges AppKit text input callbacks into managed code. To build it when developing locally:
+When targeting macOS the project includes a tiny native helper (`libTextCoreNativeMacInput.dylib`) that bridges AppKit text input callbacks into managed code. To build it when developing locally:
 
 ```bash
-dotnet build src/LeXtudio.UI.Text.Core.csproj -c Debug -f net9.0-desktop /t:Build,BuildTextCoreMacInputBridge
+dotnet build src/LeXtudio.UI.Text.Core/LeXtudio.UI.Text.Core.csproj -c Debug -f net10.0 /t:Build,BuildTextCoreMacInputBridge
 ```
 
-The build produces `libUnoEditMacInput.dylib` under:
+The build produces `libTextCoreNativeMacInput.dylib` under:
 
 ```
-src/bin/<Configuration>/<TargetFramework>/libUnoEditMacInput.dylib
+src/LeXtudio.UI.Text.Core/bin/<Configuration>/net10.0/libTextCoreNativeMacInput.dylib
 ```
 
 Consumer projects that build from source should ensure this dylib is copied into their app output directory. See the `LeXtudio.UI.Text.Core.csproj` targets for an example `CopyTextCoreMacInputBridge` target.
 
 ## Packaging & CI (developer notes)
 
-- When producing NuGet packages, ensure `libUnoEditMacInput.dylib` exists in the Text.Core output before packing — the `Pack` target validates its presence for macOS packaging.
+- When producing NuGet packages, ensure `libTextCoreNativeMacInput.dylib` exists in the Text.Core output before packing - the `Pack` target validates its presence for macOS packaging.
 - In CI, build the Text.Core project and run the `BuildTextCoreMacInputBridge` target before building consumers that depend on the dylib.
 
 ## Reporting issues and contributions

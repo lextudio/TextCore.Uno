@@ -6,7 +6,7 @@ namespace LeXtudio.UI.Text.Core
 {
     /// <summary>
     /// macOS text input adapter that bridges AppKit IME callbacks through
-    /// libUnoEditMacInput.dylib when available.
+    /// libTextCoreNativeMacInput.dylib when available.
     /// </summary>
     internal sealed class MacOSTextInputAdapter : IPlatformTextInputAdapter
     {
@@ -77,7 +77,7 @@ namespace LeXtudio.UI.Text.Core
             }
             catch (DllNotFoundException)
             {
-                Log("Attach failed: libUnoEditMacInput.dylib was not found.");
+                Log("Attach failed: libTextCoreNativeMacInput.dylib was not found.");
             }
             catch (EntryPointNotFoundException ex)
             {
@@ -458,7 +458,7 @@ namespace LeXtudio.UI.Text.Core
 
         private static class NativeMethods
         {
-            [DllImport("libUnoEditMacInput.dylib", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport("libTextCoreNativeMacInput.dylib", CallingConvention = CallingConvention.Cdecl)]
             internal static extern nint unoedit_ime_create(
                 nint windowHandle,
                 nint managedContext,
@@ -467,13 +467,13 @@ namespace LeXtudio.UI.Text.Core
                 nint unmarkTextCallback,
                 nint commandCallback);
 
-            [DllImport("libUnoEditMacInput.dylib", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport("libTextCoreNativeMacInput.dylib", CallingConvention = CallingConvention.Cdecl)]
             internal static extern void unoedit_ime_destroy(nint bridgeHandle);
 
-            [DllImport("libUnoEditMacInput.dylib", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport("libTextCoreNativeMacInput.dylib", CallingConvention = CallingConvention.Cdecl)]
             internal static extern void unoedit_ime_focus(nint bridgeHandle, [MarshalAs(UnmanagedType.I1)] bool focus);
 
-            [DllImport("libUnoEditMacInput.dylib", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport("libTextCoreNativeMacInput.dylib", CallingConvention = CallingConvention.Cdecl)]
             internal static extern void unoedit_ime_update_caret_rect(
                 nint bridgeHandle,
                 ulong eventId,

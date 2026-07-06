@@ -314,7 +314,7 @@ static int unoedit_range_value(NSUInteger value)
 
 @end
 
-@interface UnoEditMacInputBridge : NSObject
+@interface TextCoreNativeMacInputBridge : NSObject
 
 @property(weak) NSWindow* window;
 @property(strong) UnoEditInputTextView* textView;
@@ -322,7 +322,7 @@ static int unoedit_range_value(NSUInteger value)
 
 @end
 
-@implementation UnoEditMacInputBridge
+@implementation TextCoreNativeMacInputBridge
 @end
 
 extern "C" {
@@ -341,7 +341,7 @@ void* unoedit_ime_create(
         return NULL;
     }
 
-    UnoEditMacInputBridge* bridge = [[UnoEditMacInputBridge alloc] init];
+    TextCoreNativeMacInputBridge* bridge = [[TextCoreNativeMacInputBridge alloc] init];
     bridge.window = window;
     bridge.textView = [[UnoEditInputTextView alloc] initWithFrame:NSMakeRect(0, 0, 2, 18)];
     bridge.textView.managedContext = managedContext;
@@ -376,7 +376,7 @@ void unoedit_ime_destroy(void* bridgeHandle)
         return;
     }
 
-    UnoEditMacInputBridge* bridge = (__bridge_transfer UnoEditMacInputBridge*)bridgeHandle;
+    TextCoreNativeMacInputBridge* bridge = (__bridge_transfer TextCoreNativeMacInputBridge*)bridgeHandle;
     unoedit_log(@"unoedit_ime_destroy textView=%@", bridge.textView);
     if (bridge.keyEventMonitor != nil) {
         [NSEvent removeMonitor:bridge.keyEventMonitor];
@@ -387,7 +387,7 @@ void unoedit_ime_destroy(void* bridgeHandle)
 
 void unoedit_ime_focus(void* bridgeHandle, bool focus)
 {
-    UnoEditMacInputBridge* bridge = (__bridge UnoEditMacInputBridge*)bridgeHandle;
+    TextCoreNativeMacInputBridge* bridge = (__bridge TextCoreNativeMacInputBridge*)bridgeHandle;
     if (bridge == nil || bridge.window == nil || bridge.textView == nil) {
         unoedit_log(@"unoedit_ime_focus ignored: bridge/window/textView missing.");
         return;
@@ -402,7 +402,7 @@ void unoedit_ime_focus(void* bridgeHandle, bool focus)
 
 bool unoedit_ime_is_focused(void* bridgeHandle)
 {
-    UnoEditMacInputBridge* bridge = (__bridge UnoEditMacInputBridge*)bridgeHandle;
+    TextCoreNativeMacInputBridge* bridge = (__bridge TextCoreNativeMacInputBridge*)bridgeHandle;
     if (bridge == nil || bridge.window == nil || bridge.textView == nil) {
         return false;
     }
@@ -414,7 +414,7 @@ bool unoedit_ime_is_focused(void* bridgeHandle)
 
 void unoedit_ime_update_caret_rect(void* bridgeHandle, unsigned long long eventId, double x, double y, double width, double height)
 {
-    UnoEditMacInputBridge* bridge = (__bridge UnoEditMacInputBridge*)bridgeHandle;
+    TextCoreNativeMacInputBridge* bridge = (__bridge TextCoreNativeMacInputBridge*)bridgeHandle;
     if (bridge == nil || bridge.window == nil || bridge.window.contentView == nil || bridge.textView == nil) {
         unoedit_log(@"unoedit_ime_update_caret_rect ignored: bridge/window/contentView/textView missing. id=%llu", (unsigned long long)eventId);
         return;
@@ -453,7 +453,7 @@ void unoedit_ime_update_caret_rect(void* bridgeHandle, unsigned long long eventI
 
 double unoedit_ime_get_backing_scale(void* bridgeHandle)
 {
-    UnoEditMacInputBridge* bridge = (__bridge UnoEditMacInputBridge*)bridgeHandle;
+    TextCoreNativeMacInputBridge* bridge = (__bridge TextCoreNativeMacInputBridge*)bridgeHandle;
     if (bridge == nil || bridge.window == nil) {
         unoedit_log(@"unoedit_ime_get_backing_scale ignored: bridge/window missing.");
         return 1.0;
@@ -467,7 +467,7 @@ double unoedit_ime_get_backing_scale(void* bridgeHandle)
 
 void unoedit_ime_get_first_rect(void* bridgeHandle, double* outX, double* outY, double* outW, double* outH)
 {
-    UnoEditMacInputBridge* bridge = (__bridge UnoEditMacInputBridge*)bridgeHandle;
+    TextCoreNativeMacInputBridge* bridge = (__bridge TextCoreNativeMacInputBridge*)bridgeHandle;
     if (bridge == nil || bridge.window == nil || bridge.textView == nil) {
         if (outX) *outX = 0.0;
         if (outY) *outY = 0.0;
@@ -497,7 +497,7 @@ void unoedit_ime_get_first_rect(void* bridgeHandle, double* outX, double* outY, 
 
 void unoedit_ime_compute_first_rect_from_rect(void* bridgeHandle, double x, double y, double width, double height, double* outX, double* outY, double* outW, double* outH)
 {
-    UnoEditMacInputBridge* bridge = (__bridge UnoEditMacInputBridge*)bridgeHandle;
+    TextCoreNativeMacInputBridge* bridge = (__bridge TextCoreNativeMacInputBridge*)bridgeHandle;
     if (bridge == nil || bridge.window == nil || bridge.window.contentView == nil) {
         if (outX) *outX = 0.0;
         if (outY) *outY = 0.0;

@@ -1,12 +1,12 @@
-# TextCore.Uno — Core Text APIs for Uno Platform
+# TextCore.Native — UI-agnostic Cross-Platform Core Text APIs
 
-TextCore.Uno aims to offer a small, stable set of CoreText/IME primitives editor
-hosts can use to implement platform text input and IME support on Skia-based
-desktop platforms. It exposes a managed `CoreText*` API surface and uses
-different approaches for platform integration:
+TextCore.Native offers a small, stable set of CoreText/IME primitives editor hosts
+can use to implement platform text input and IME support without depending on
+Uno Platform, WPF, or any other UI framework. It exposes a managed `CoreText*`
+API surface and uses different approaches for platform integration:
 
 - On Windows, it uses the Win32 IME APIs (user32/imm32) via P/Invoke.
-- On macOS, it includes a tiny native macOS helper (`libUnoEditMacInput.dylib`) used to surface AppKit text input callbacks to managed code.
+- On macOS, it includes a tiny native macOS helper (`libTextCoreNativeMacInput.dylib`) used to surface AppKit text input callbacks to managed code.
 - On Linux, it uses `libX11` via P/Invoke for X11 calls and communicates with
   IBus over D-Bus using a built-in managed DBus-over-socket implementation
   (no libibus/libdbus P/Invoke).
@@ -41,7 +41,7 @@ For advanced workflows (consuming from source, building the native macOS helper,
 
 Lifecycle methods:
 
-- `bool Attach(nint windowHandle)` — attach to a native window.
+- `bool AttachToWindowHandle(nint windowHandle, nint displayHandle = 0)` — attach to a native window. On macOS pass an `NSWindow*`; on Windows pass an `HWND`; on Linux/X11 pass the X11 Window id and the X11 Display pointer.
 - `void NotifyCaretRectChanged(double x, double y, double width, double height)`.
 - `void NotifyFocusEnter()` / `void NotifyFocusLeave()`.
 - `void Dispose()`.
@@ -58,7 +58,7 @@ ctx.CommandReceived += (s, e) => {
   if (e.Command == "deleteBackward:") { Backspace(); e.Handled = true; }
 };
 
-ctx.Attach(hwnd);
+ctx.AttachToWindowHandle(hwnd);
 ctx.NotifyCaretRectChanged(x, y, w, h);
 // ...
 ctx.Dispose();

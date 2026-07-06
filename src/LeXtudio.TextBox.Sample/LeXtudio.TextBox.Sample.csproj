@@ -25,11 +25,11 @@
   </ItemGroup>
 
   <!-- If the native macOS IME bridge was built in the core project, copy it to this sample's output so
-       the DllImport("libUnoEditMacInput.dylib") can find it at runtime. -->
+       the DllImport("libTextCoreNativeMacInput.dylib") can find it at runtime. -->
   <Target Name="CopyMacImeDylibToOutput" AfterTargets="Build" Condition="'$(UseNuGetPackages)' != 'true'">
     <PropertyGroup>
-      <CoreDylibPath>$(MSBuildThisFileDirectory)..\src\bin\$(Configuration)\net10.0-desktop\libUnoEditMacInput.dylib</CoreDylibPath>
-      <DestDylib>$(OutputPath)libUnoEditMacInput.dylib</DestDylib>
+      <CoreDylibPath>$(MSBuildThisFileDirectory)..\LeXtudio.UI.Text.Core\bin\$(Configuration)\net10.0\libTextCoreNativeMacInput.dylib</CoreDylibPath>
+      <DestDylib>$(OutputPath)libTextCoreNativeMacInput.dylib</DestDylib>
     </PropertyGroup>
     <Copy Condition="Exists('$(CoreDylibPath)')" SourceFiles="$(CoreDylibPath)" DestinationFiles="$(DestDylib)" />
   </Target>

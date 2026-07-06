@@ -1,23 +1,23 @@
 using System;
-using System.Reflection;
-using System.Runtime.InteropServices;
-using Microsoft.UI.Xaml;
-using Uno.UI.Xaml;
 
 namespace LeXtudio.UI.Text.Core
 {
-#if NET9_0
-    public delegate void EventHandler<TSender, TEventArgs>(TSender sender, TEventArgs e);
-#endif
     /// <summary>
     /// Central event hub that raises text, selection, layout and composition events
     /// for adapters and editor hosts.
     /// Consumers obtain instances via <see cref="CoreTextServicesManager.CreateEditContext"/>.
     /// The underlying platform adapter is transparent — callers never see it.
+    ///
+    /// This type has no dependency on any UI framework: callers resolve the native
+    /// window handle themselves (e.g. via WPF's WindowInteropHelper on Windows, or a host-specific
+    /// accessor like librewpf's WpfPortableWindowActivation.TryGetNativeWindowHandle on macOS/Linux)
+    /// and pass it to <see cref="AttachToWindowHandle"/> - there is no reflection-based window
+    /// unwrapping here.
     /// </summary>
     public sealed class CoreTextEditContext : IDisposable
     {
         private readonly IPlatformTextInputAdapter _adapter;
+
         /// <summary>
         /// Input scope hint for the platform IME. Mirrors WinUI's CoreTextInputScope.
         /// Consumers may set this to inform platform keyboards/IMEs of the expected input.
@@ -46,25 +46,25 @@ namespace LeXtudio.UI.Text.Core
         // ----- Events (public surface for consumers) -----
 
         /// <summary>Occurs when the platform requests the current text.</summary>
-        public event EventHandler<CoreTextEditContext, CoreTextTextRequestedEventArgs>? TextRequested;
+        public event TypedEventHandler<CoreTextEditContext, CoreTextTextRequestedEventArgs>? TextRequested;
 
         /// <summary>Occurs when text is being updated by the platform.</summary>
-        public event EventHandler<CoreTextEditContext, CoreTextTextUpdatingEventArgs>? TextUpdating;
+        public event TypedEventHandler<CoreTextEditContext, CoreTextTextUpdatingEventArgs>? TextUpdating;
 
         /// <summary>Occurs when the platform requests the current selection.</summary>
-        public event EventHandler<CoreTextEditContext, CoreTextSelectionRequestedEventArgs>? SelectionRequested;
+        public event TypedEventHandler<CoreTextEditContext, CoreTextSelectionRequestedEventArgs>? SelectionRequested;
 
         /// <summary>Occurs when the selection is being updated by the platform.</summary>
-        public event EventHandler<CoreTextEditContext, CoreTextSelectionUpdatingEventArgs>? SelectionUpdating;
+        public event TypedEventHandler<CoreTextEditContext, CoreTextSelectionUpdatingEventArgs>? SelectionUpdating;
 
         /// <summary>Occurs when a layout measurement is requested by the platform.</summary>
-        public event EventHandler<CoreTextEditContext, CoreTextLayoutRequestedEventArgs>? LayoutRequested;
+        public event TypedEventHandler<CoreTextEditContext, CoreTextLayoutRequestedEventArgs>? LayoutRequested;
 
         /// <summary>Occurs when IME composition starts.</summary>
-        public event EventHandler<CoreTextEditContext, CoreTextCompositionStartedEventArgs>? CompositionStarted;
+        public event TypedEventHandler<CoreTextEditContext, CoreTextCompositionStartedEventArgs>? CompositionStarted;
 
         /// <summary>Occurs when IME composition completes.</summary>
-        public event EventHandler<CoreTextEditContext, CoreTextCompositionCompletedEventArgs>? CompositionCompleted;
+        public event TypedEventHandler<CoreTextEditContext, CoreTextCompositionCompletedEventArgs>? CompositionCompleted;
 
         /// <summary>Occurs when focus is removed from the text context.</summary>
         public event TypedEventHandler<CoreTextEditContext, object>? FocusRemoved;
@@ -74,30 +74,15 @@ namespace LeXtudio.UI.Text.Core
 
         // ----- Lifecycle (called by the host application) -----
 
-        private bool Attach(nint windowHandle, nint displayHandle = 0) => _adapter.Attach(windowHandle, displayHandle, this);
-
         /// <summary>
-        /// Attach this context to the current native window so the platform
-        /// adapter can start listening for IME events.
+        /// Attach this context to a native window handle so the platform adapter can start
+        /// listening for IME events. On macOS <paramref name="windowHandle"/> is an NSWindow*;
+        /// on Windows, an HWND; on Linux/X11, pass the X11 Window id and set
+        /// <paramref name="displayHandle"/> to the X11 Display*.
         /// </summary>
-        /// <param name="window">The current window instance used to resolve native handles.</param>
         /// <returns><c>true</c> if the adapter attached successfully.</returns>
-        public bool AttachToCurrentWindow(Window? window)
-        {
-            nint windowHandle = nint.Zero;
-            nint displayHandle = nint.Zero;
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            {
-                TryGetX11Handles(window, out displayHandle, out windowHandle);
-            }
-
-            if (windowHandle == nint.Zero)
-            {
-                windowHandle = TryGetNativeWindowHandle(window);
-            }
-
-            return Attach(windowHandle, displayHandle);
-        }
+        public bool AttachToWindowHandle(nint windowHandle, nint displayHandle = 0)
+            => _adapter.Attach(windowHandle, displayHandle, this);
 
         /// <summary>
         /// Notify the platform that the caret rectangle has changed so the IME
@@ -139,7 +124,7 @@ namespace LeXtudio.UI.Text.Core
         /// Forward a key event to the platform IME for processing.
         /// Returns <c>true</c> if the IME consumed the key (caller should suppress normal handling).
         /// </summary>
-        /// <param name="virtualKey">The virtual key code (cast from <c>Windows.System.VirtualKey</c>).</param>
+        /// <param name="virtualKey">The virtual key code (cast from WPF's System.Windows.Input.Key).</param>
         /// <param name="shiftPressed">Whether the Shift modifier is active.</param>
         /// <param name="controlPressed">Whether the Control modifier is active.</param>
         /// <param name="unicodeKey">Optional Unicode character for keys that map to VirtualKey.None.</param>
@@ -177,119 +162,5 @@ namespace LeXtudio.UI.Text.Core
 
         /// <summary>Raise the <see cref="CommandReceived"/> event.</summary>
         public void RaiseCommandReceived(CoreTextCommandReceivedEventArgs e) => CommandReceived?.Invoke(this, e);
-
-        private static nint TryGetNativeWindowHandle(Window? window)
-        {
-            if (window is null)
-            {
-                return System.Diagnostics.Process.GetCurrentProcess().MainWindowHandle;
-            }
-
-            object? nativeWindow = WindowHelper.GetNativeWindow(window);
-            if (nativeWindow is null)
-            {
-                return nint.Zero;
-            }
-
-            string nativeTypeName = nativeWindow.GetType().FullName ?? string.Empty;
-            if (nativeTypeName == "System.Windows.Window")
-            {
-                try
-                {
-                    Type? helperType = Type.GetType(
-                        "System.Windows.Interop.WindowInteropHelper, PresentationFramework, Version=4.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35");
-                    helperType ??= Type.GetType("System.Windows.Interop.WindowInteropHelper, PresentationFramework");
-                    if (helperType is null)
-                    {
-                        return nint.Zero;
-                    }
-
-                    object? helper = Activator.CreateInstance(helperType, nativeWindow);
-                    PropertyInfo? handleProp = helperType.GetProperty("Handle", BindingFlags.Instance | BindingFlags.Public);
-                    return ToNativeHandle(handleProp?.GetValue(helper));
-                }
-                catch
-                {
-                    return nint.Zero;
-                }
-            }
-
-            foreach (string name in new[] { "Hwnd", "HWnd", "Handle", "WindowHandle", "NativeHandle", "Pointer", "hwnd", "_hwnd" })
-            {
-                PropertyInfo? p = nativeWindow.GetType().GetProperty(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                if (p is not null)
-                {
-                    nint handle = ToNativeHandle(p.GetValue(nativeWindow));
-                    if (handle != nint.Zero)
-                    {
-                        return handle;
-                    }
-                }
-
-                FieldInfo? f = nativeWindow.GetType().GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                if (f is not null)
-                {
-                    nint handle = ToNativeHandle(f.GetValue(nativeWindow));
-                    if (handle != nint.Zero)
-                    {
-                        return handle;
-                    }
-                }
-            }
-
-            return nint.Zero;
-        }
-
-        private static void TryGetX11Handles(Window? window, out nint display, out nint nativeWindow)
-        {
-            display = nint.Zero;
-            nativeWindow = nint.Zero;
-
-            try
-            {
-                if (window is null)
-                {
-                    return;
-                }
-
-                var hostType = Type.GetType("Uno.WinUI.Runtime.Skia.X11.X11XamlRootHost, Uno.UI.Runtime.Skia.X11");
-                if (hostType is null)
-                {
-                    return;
-                }
-
-                var getHost = hostType.GetMethod("GetHostFromWindow", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
-                var host = getHost?.Invoke(null, new object[] { window });
-                if (host is null)
-                {
-                    return;
-                }
-
-                var rootX11WindowProp = hostType.GetProperty("RootX11Window", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                var x11Window = rootX11WindowProp?.GetValue(host);
-                if (x11Window is null)
-                {
-                    return;
-                }
-
-                var windowType = x11Window.GetType();
-                display = ToNativeHandle(windowType.GetProperty("Display", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(x11Window));
-                nativeWindow = ToNativeHandle(windowType.GetProperty("Window", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(x11Window));
-            }
-            catch
-            {
-            }
-        }
-
-        private static nint ToNativeHandle(object? value)
-        {
-            return value switch
-            {
-                IntPtr handle => handle,
-                long handle => new nint(handle),
-                int handle => new nint(handle),
-                _ => nint.Zero,
-            };
-        }
     }
 }

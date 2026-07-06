@@ -14,7 +14,7 @@ env UNOEDIT_DEBUG_IME=1 dotnet run -c Debug -f net10.0-desktop
 
 ## Notes
 
-- On macOS the sample attempts to load `libUnoEditMacInput.dylib` (native
+- On macOS the sample attempts to load `libTextCoreNativeMacInput.dylib` (native
   bridge). Build the native bridge under
   `external/coretext/src/Native/MacOS` and copy the resulting library into the
   runtime output so the sample can load it. The sample project contains
