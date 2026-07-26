@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented in this file. This project follows the "Keep a Changelog" format.
 
+## [v1.0.3] - 2026-07-26
+
+- Fixed a crash in UnoEdit.
+
 ## [v1.0.2] - 2026-07-26
 
 - Fixed a crash in UnoEdit.
