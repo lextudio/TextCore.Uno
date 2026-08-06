@@ -2,10 +2,9 @@
 setlocal enabledelayedexpansion
 
 REM dist.all.bat — Build, pack, and sign all nupkgs on Windows.
-REM Expects the LeXtudio.UI.Text.Core nupkg to already be present in dist\
-REM (copy it there from macOS before running this script).
-REM Builds both the Uno desktop and WinUI targets of LeXtudio.TextBox, packs it
-REM into dist\, then signs all packages found in dist\.
+REM Builds LeXtudio.UI.Text.Core, then both the Uno desktop and WinUI targets
+REM of LeXtudio.TextBox, packs everything into dist\, then signs all packages
+REM found in dist\.
 REM Usage: dist.all.bat [Configuration] [PackageVersion]
 REM Example: dist.all.bat Release 0.2.1
 
@@ -18,19 +17,21 @@ if "%CONFIG%"=="" set CONFIG=Release
 set PKGVER=%~2
 if "%PKGVER%"=="" set PKGVER=0.2.1
 
-set PROJECT=src\LeXtudio.TextBox\LeXtudio.TextBox.csproj
+set CORE_PROJECT=src\LeXtudio.UI.Text.Core\LeXtudio.UI.Text.Core.csproj
 set OUT_DIR=%SCRIPT_DIR%dist
 
 echo dist.all.bat: Configuration=%CONFIG% PackageVersion=%PKGVER%
 
-if not exist "%OUT_DIR%" mkdir "%OUT_DIR%"
+echo Cleaning %OUT_DIR%...
+if exist "%OUT_DIR%" rmdir /s /q "%OUT_DIR%"
+mkdir "%OUT_DIR%"
 
 echo Restoring packages...
-dotnet restore "%PROJECT%"
+dotnet restore "%CORE_PROJECT%"
 if errorlevel 1 exit /b 1
 
-echo Packing nupkg to %OUT_DIR%...
-dotnet pack "%PROJECT%" -c %CONFIG% -o "%OUT_DIR%" /p:PackageVersion=%PKGVER%
+echo Packing LeXtudio.UI.Text.Core nupkg to %OUT_DIR%...
+dotnet pack "%CORE_PROJECT%" -c %CONFIG% -o "%OUT_DIR%" /p:PackageVersion=%PKGVER%
 if errorlevel 1 exit /b 1
 
 echo.

@@ -1,23 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <Target Name="LeXtudioCopyMacNativeBridge"
-          AfterTargets="Build"
-          Condition="'$(OS)' == 'Unix' and Exists('/System/Library/Frameworks/AppKit.framework')">
-    <PropertyGroup>
-      <LeXtudioMacDylibPath Condition="Exists('$(MSBuildThisFileDirectory)../../runtimes/osx/native/libTextCoreNativeMacInput.dylib')">$(MSBuildThisFileDirectory)../../runtimes/osx/native/libTextCoreNativeMacInput.dylib</LeXtudioMacDylibPath>
-      <LeXtudioMacDylibPath Condition="'$(LeXtudioMacDylibPath)' == '' and Exists('$(MSBuildThisFileDirectory)../../runtimes/osx-arm64/native/libTextCoreNativeMacInput.dylib')">$(MSBuildThisFileDirectory)../../runtimes/osx-arm64/native/libTextCoreNativeMacInput.dylib</LeXtudioMacDylibPath>
-      <LeXtudioMacDylibPath Condition="'$(LeXtudioMacDylibPath)' == '' and Exists('$(MSBuildThisFileDirectory)../../runtimes/osx-x64/native/libTextCoreNativeMacInput.dylib')">$(MSBuildThisFileDirectory)../../runtimes/osx-x64/native/libTextCoreNativeMacInput.dylib</LeXtudioMacDylibPath>
-    </PropertyGroup>
-
-    <Copy SourceFiles="$(LeXtudioMacDylibPath)"
-          DestinationFolder="$(OutDir)"
-          SkipUnchangedFiles="true"
-          Condition="'$(LeXtudioMacDylibPath)' != ''">
-      <Output TaskParameter="DestinationFiles" ItemName="LeXtudioCopiedNativeFiles" />
-    </Copy>
-
-    <Message Importance="low"
-             Text="[LeXtudio.UI.Text.Core] Copied native macOS bridge: @(LeXtudioCopiedNativeFiles)"
-             Condition="'@(LeXtudioCopiedNativeFiles)' != ''" />
-  </Target>
+  <!-- No custom native bridge to copy: macOS IME now binds to Uno's own libUnoNativeMac.dylib. -->
 </Project>
